@@ -11,7 +11,7 @@ Automate your job application process on Workday with this script! This tool str
 3. [System Architecture](#system-architecture)
 4. [Contributing](#contributing)
 5. [Future Improvements](#future-improvements)
-6 [Support the project](#support-the-project)
+6. [Support the project](#support-the-project)
 ---
 
 ## **Prerequisites**
@@ -58,11 +58,11 @@ Contributions are welcome! If you encounter any bugs or have suggestions for imp
    ```
    5. Submit a pull request.
 
-5. ## *Future Improvements**
+## *Future Improvements**
    Enhanced User Experience: Improve the script's ability to adapt to new workflows dynamically possibly utilizing agents.
    CAPTCHA Automation: Research and implement solutions for automating CAPTCHA challenges.
    Detailed Logs: Add logging to provide more visibility into the process.
    Interactive UI: Create a graphical interface for easier configuration and execution.
 
-6. ## **Support the project**
+## **Support the project**
 If you find this script useful and want to support its development, consider donating using buy me a coffee  (https://buymeacoffee.com/healthIsWealth809 )
