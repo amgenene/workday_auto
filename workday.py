@@ -59,7 +59,7 @@ class Workday:
     try:
       self.wait.until(EC.element_to_be_clickable((By.XPATH, "input[@type='checkbox']")))
       self.driver.find_element(By.XPATH, "input[@type='checkbox']").click()
-    except TimeoutException:
+    except Exception as e:
       print("Exception: 'No button for Signup'")
     time.sleep(5)
     try:
@@ -82,6 +82,13 @@ class Workday:
   def signin(self):
     print("Signin")
     try:
+      self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='Sign In']")))
+      self.driver.find_element(By.XPATH, "//button[text()='Sign In']").click()
+    except Exception as e:
+      print("Exception: 'No button for Signup'")
+    time.sleep(5)
+    try:
+      
         self.driver.find_element(By.CSS_SELECTOR, "input[type='text'][data-automation-id='email']").send_keys(self.profile['email'])
         self.driver.find_element(By.CSS_SELECTOR, "input[type='password'][data-automation-id='password']").send_keys(self.profile['password'])
         button = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "div[role='button'][aria-label='Sign In'][data-automation-id='click_filter']")))
@@ -90,7 +97,7 @@ class Workday:
     except Exception as e:
       print("Exception: 'Signin failed'", e)
 
-  def find_next_sibling_safely(self, start_element, max_levels=3):
+  def find_next_sibling_safely(self, start_element, parent, max_levels=5):
     """
     Safely navigate up the DOM tree and find the next sibling div,
     checking for elements at each level before proceeding.
@@ -105,29 +112,33 @@ class Workday:
     try:
         current = start_element
         for level in range(max_levels):
+            print(f"Current level: {current.tag_name, current.text}")
             # First check if there's a sibling at current level
-            siblings = current.find_elements(By.XPATH, "./following-sibling::div[@data-automation-id]")
+            siblings = current.find_elements(By.XPATH, "./following-sibling::div//*[@data-automation-id][position()=1]")
             if siblings:
                 print(f"Found sibling at level {level}")
-                return siblings[0], level
-            
+                return siblings[0], level, False
+            print("HEREE1")
+            if not siblings:
+              print("HEREE")
+              siblings = current.find_elements(By.XPATH, "./following-sibling::div//*[@id][position()=1]")
+              if siblings:
+                print(f"Found sibling at level {level} sibling container: {siblings[0].tag_name, siblings[0].text}")
+                return siblings[0], level, True
             # If no siblings, try to go up one level
             try:
-                parent = current.find_element(By.XPATH, "./..")
                 # Verify we actually moved up (parent should be different from current)
-                if parent.id == current.id:
+                if parent.data_automation_id == current.data_automation_id:
                     print(f"Reached same element at level {level}, stopping")
-                    return None, level
-                current = parent
+                    return None, level, False
             except:
                 print(f"Cannot go up from level {level}")
-                return None, level
-                
-        return None, max_levels
+            current = current.find_element(By.XPATH, "./..")        
+        return None, max_levels, False
         
     except Exception as e:
         print(f"Error in safe navigation: {e}")
-        return None, 0
+        return None, 0, False
   def fillform_page_1(self):
     try:
       self.driver.find_element(By.CSS_SELECTOR, "input[data-automation-id='file-upload-input-ref']").send_keys(self.profile['resume_path'])
@@ -148,18 +159,20 @@ class Workday:
         question_text = question.text
         if not question_text:
           continue
-        container, levels_traversed = self.find_next_sibling_safely(question)
+        parent = question.find_element(By.XPATH, "./ancestor::div[@data-automation-id][position()=1]")
+        print(f"Parent automation-id: {parent.get_attribute('data-automation-id')}")
+        container, levels_traversed, is_id = self.find_next_sibling_safely(question, parent)
         print("question tag name", question.tag_name, question.text)
+        print(container.tag_name, container.text)
         # Get the parent div that would contain both question and input area
-        print(f"Container class: {container.get_attribute('class')}")
         # Find any element with data-automation-id within this container
-        input_field = container.find_element(By.CSS_SELECTOR, "[data-automation-id]")
-        automation_id = input_field.get_attribute('data-automation-id')
-        print(f"Input_field: {input_field.get_attribute('data-automation-id')}")
+        # input_field = container.find_element(By.CSS_SELECTOR, "[data-automation-id]") if not is_id else container.find_element(By.XPATH, "//*[@id][position()=1]")
+        automation_id = container.get_attribute('data-automation-id') if not is_id else container.get_attribute('id')
+        # print(f"Input_field: {input_field.get_attribute('data-automation-id')}")
         print(f"\nQuestion: {question_text}")
         print(f"Element automation-id: {automation_id}")
-        print(f"input field: {input_field}")
-        questions.append((question_text, input_field, automation_id))
+        # print(f"input field: {input_field}")
+        questions.append((question_text, container, automation_id))
       except Exception as e:
         print(f"Error processing field: {e}")
         continue
@@ -180,17 +193,15 @@ class Workday:
       
       if best_match_score > 75:  # Set a threshold for what you consider a "match"
             print(f"Executing action for question: {question_text} with best match score of: {best_match_score}, {best_match_value}")
-            action_result = best_match_action(input_element, input_element.get_attribute('data-automation-id'), values=best_match_value) if best_match_value is not None else best_match_action(input_element.get_attribute('data-automation-id'))
+            action_result = best_match_action(input_element, automation_id, values=best_match_value) if best_match_value is not None else best_match_action(input_element.get_attribute('data-automation-id'))
             time.sleep(6)
             if action_result:
                   print(f"Action successful: {best_match_action}")
             else:
                   print(f"Action failed: {best_match_action}")
             handled = True
-      
       if not handled:
           print(f"No matching action found for question: {question_text}. Please fill manually")
-
     print(f"\nSuccessfully processed {len(questions)} questions")
     print("\nQuestions found:")
     for q, i, aid in questions:
@@ -217,8 +228,12 @@ class Workday:
       return False
     
   def click_next(self):
-    button = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-automation-id='bottom-navigation-next-button']")))
-    button.click()
+    try:
+      button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='Next' or text()='Continue' or text()='Submit' or text()='Save and Continue' or text()='Review and Submit']")))
+      button.click()
+    except Exception as e:
+      print("Exception: 'No button for Next please continue'")
+    time.sleep(5)
     try:
       error_button = self.driver.find_element(By.CSS_SELECTOR, "button[data-automation-id='errorBanner']")
       print("Exception: 'Errors on page. Please resolve and submit manually. You have 60 seconds to do so!'")
@@ -232,6 +247,7 @@ class Workday:
       parsed_url = urlparse(self.url)
       company = parsed_url.netloc.split('.')[0]
       existing_company = company in self.config.read_companies()
+      print("company subdomain:", company)
       self.driver.get(self.url) # Open a webpage
       time.sleep(4)
         
@@ -261,6 +277,7 @@ class Workday:
       if len(p_tags) > 0:
         print("Verification needed")
         input("Please verify your account and press Enter when you're ready to continue...")
+      time.sleep(6)
       step1 = self.fillform_page_1()
       if not step1:
         input("Press Enter when you're ready to continue with page 1...")
@@ -352,7 +369,13 @@ class Workday:
       # Clear the existing value
       element.clear()
       time.sleep(1)
-      element = self.driver.find_element(By.CSS_SELECTOR, f"input[data-automation-id='{data_automation_id}']")
+      element = None
+      try:
+        element = self.driver.find_element(By.CSS_SELECTOR, f"input[data-automation-id='{data_automation_id}']")
+      except:
+        element = self.driver.find_element(By.ID, f"{data_automation_id}")
+      self.wait.until(EC.element_to_be_clickable(element))
+      # Send the new value
       element.send_keys(values)
       time.sleep(1)
       return True
@@ -361,21 +384,27 @@ class Workday:
       return False
   def select_checkbox(self, element, data_automation_id):
     radio_button = radio_options.find_element(By.CSS_SELECTOR, 'input[type="checkbox"]')
-    wait.until(EC.element_to_be_clickable(radio_button))
+    self.wait.until(EC.element_to_be_clickable(radio_button))
     radio_button.click()
 
-  def select_radio(self, element, data_automation_id, values="", checkbox=False):
+  def select_radio(self, element, data_automation_id, values=""):
     """
     Handle radio button selections with the specific Workday HTML structure
     """
+    has_id = False
+    try:
+      element.get_attribute('id')
+      has_id = True
+    except Exception as e :
+      has_id = False
     try:
         print(f"Selecting radio value: {values} for automation-id: {data_automation_id}")
         
         # Find the container with the radio group
         radio_group = self.wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, f'div[data-automation-id="{data_automation_id}"]'))
+            EC.presence_of_element_located((By.CSS_SELECTOR, f'div[data-automation-id="{data_automation_id}"]')) if not has_id else
+            EC.presence_of_element_located((By.ID, f"{data_automation_id}"))
         )
-        
         # Find all radio options within the group
         radio_options = radio_group.find_elements(By.CSS_SELECTOR, 'div[class*="css-1utp272"]')
         for option in radio_options:
@@ -400,7 +429,7 @@ class Workday:
                 print(f"Error with option: {e}")
                 continue
         
-        print(f"No matching radio option found for value: {value}")
+        print(f"No matching radio option found for value: {values}")
         print("Available options:", [opt.find_element(By.CSS_SELECTOR, 'label').text for opt in radio_options])
         return False
         

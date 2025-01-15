@@ -59,6 +59,7 @@ Contributions are welcome! If you encounter any bugs or have suggestions for imp
    5. Submit a pull request.
 
 ## *Future Improvements**
+   Refactor Code: Clean up and optimize the code for better maintainability.
    Enhanced User Experience: Improve the script's ability to adapt to new workflows dynamically possibly utilizing agents.
    CAPTCHA Automation: Research and implement solutions for automating CAPTCHA challenges.
    Detailed Logs: Add logging to provide more visibility into the process.

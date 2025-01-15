@@ -8,11 +8,12 @@ class Config:
     self.companies_file = self.read_companies()
 
   def read_companies(self):
-    companies_file = open(self.file, 'r')
+    companies_file = open("./config/companies.txt", 'r')
     company_subdomains = []
     for company_subdomain in companies_file:
       company_subdomains.append(company_subdomain.strip())
     companies_file.close()
+    print("company_subdomains:", company_subdomains)
     return company_subdomains
 
   def write_company(self, company_subdomain):
