@@ -25,16 +25,16 @@ class Workday:
         (["Are you legally eligible to work"], self.answer_dropdown, "Yes" ),
         (["Do you now or will you in the future require sponsorship for a work visa"], self.answer_dropdown, "No" ),
         (["have you previously been employed", "have you ever worked for"],  self.select_radio, "No"),
-        (["country"],  self.answer_dropdown, "United States of America"),
         (["first name"],  self.fill_input, self.profile['first_name'],),
         (["last name"],  self.fill_input, self.profile['family_name']),
         (["email"],  self.fill_input, self.profile['email']),
         (["phone device type"],  self.answer_dropdown, "Mobile"),
-        (["country phone code"],  self.answer_dropdown, "United States (+1)"),
         (["phone number"],  self.fill_input, self.profile['phone_number']),
         (["are you legally authorized"],  self.select_radio, "Yes"),
-        (["will you now or in the future"],  self.select_radio, "No"),
-        (["do you require sponsorship"],  self.select_radio, "No"),
+        (["will you now or in the future"],  self.answer_dropdown, "No"),
+        (["Are you at least 18 years of age?"],  self.answer_dropdown, "Yes"),
+        (["Do you have an agreement or contract such as a non-disclosure or non-competitive agreement with another employer that might restrict your employment at"],  self.answer_dropdown, "No"),
+        (["do you require sponsorship"],  self.answer_dropdown, "No"),
         (["disability status"],  self.select_radio, "I don't wish to answer"),
         (["veteran status"],  self.answer_dropdown, "I am not"),
         (["gender"],  self.answer_dropdown, "Male"),
@@ -45,15 +45,19 @@ class Workday:
         (["I understand and acknowledge the terms of use"],  self.select_checkbox, None),
     ]
   def handle_date(self, element, _):
-    month_input = element.find_element(By.CSS_SELECTOR, "div[dateSectionMonth-display='dateSectionMonth-display']")
-    day_input = element.find_element(By.CSS_SELECTOR, "div[dateSectionDay-display='dateSectionDay-display']")
-    year_input = element.find_element(By.CSS_SELECTOR, "div[dateSectionYear-display='dateSectionYear-display']")
-    self.wait.until(EC.element_to_be_clickable(month_input))
-    self.wait.until(EC.element_to_be_clickable(day_input))
-    self.wait.until(EC.element_to_be_clickable(year_input))
-    month_input.send_keys(datetime.now().strftime("%m"))
-    day_input.send_keys(datetime.now().strftime("%d"))
-    year_input.send_keys(datetime.now().strftime("%Y"))
+    try:
+      month_input = element.find_element(By.CSS_SELECTOR, "div[dateSectionMonth-display='dateSectionMonth-display']")
+      day_input = element.find_element(By.CSS_SELECTOR, "div[dateSectionDay-display='dateSectionDay-display']")
+      year_input = element.find_element(By.CSS_SELECTOR, "div[dateSectionYear-display='dateSectionYear-display']")
+      self.wait.until(EC.element_to_be_clickable(month_input))
+      self.wait.until(EC.element_to_be_clickable(day_input))
+      self.wait.until(EC.element_to_be_clickable(year_input))
+      month_input.send_keys(datetime.now().strftime("%m"))
+      day_input.send_keys(datetime.now().strftime("%d"))
+      year_input.send_keys(datetime.now().strftime("%Y"))
+    except Exception as e:
+      print("Exception: 'No date input'", e)
+    return True
   def signup(self):
     print("Signup")
     try:
@@ -356,6 +360,8 @@ class Workday:
         
     except Exception as e:
         print(f"Error in answer_dropdown: {e}")
+        # Fallback try to call select_radio if this fails
+        self.select_radio(element, _, values)
         return False
 
   def fill_input(self, element, data_automation_id, values=[]):
@@ -435,6 +441,7 @@ class Workday:
         
     except Exception as e:
         print(f"Error in select_radio: {e}")
+        self.answer_dropdown(element, data_automation_id, values)
         return False
 
 def main():

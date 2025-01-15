@@ -1,32 +1,33 @@
 ---
-email: alazar.genene@gmail.com
-password: Pendragon1324$
-first_name: Alazar 
-family_name: Genene
-first_name_local: Alazar
-address_line_1: 9 Woodlake Rd, Albany
-address_line_2: N/A
-address_line_3: N/A
-address_city: Albany
-address_postal_code: '12203'
-phone_number: '845-240-8505'
-linkedin_question: https://www.linkedin.com/in/alazar-genene-464843133/
-resume_path: "/Users/alazargenene/Downloads/Resume.pdf"
-education: Worcester Polytechnic Institute
+email: 
+password: 
+first_name: 
+family_name: 
+first_name_local: 
+address_line_1: 
+address_line_2: 
+address_line_3: 
+address_city: 
+address_postal_code: 
+phone_number: 
+linkedin_question: 
+resume_path: 
+education: 
 work_experiences:
-- company: Fero Labs
-  start_year: 2022
-  start_month: May
-  end_year: Present
-  end_month: Present
-  job_title: YourJobTitle
-  location: New York, New Youk
-  role_description: Full stack software engineer that has worked on data visualzation tasks, integrating AI in our products, as well as improving the performance of the overall system.
-- company: MVP Healthcare 
-  start_year: 2021
-  start_month: March
-  end_year: 2022
-  end_month: April
-  job_title: Software Engineer
-  location: Albany, New York
-  role_description: Software Engineer working on ETL processes, upgrading legacy code, and building out new features.
+- company: 
+  start_year: 
+  start_month: 
+  end_year: 
+  end_month: 
+  job_title: 
+  location: 
+  role_description: 
+- company: 
+  start_year: 
+  start_month: 
+  end_year: 
+  end_month: 
+  job_title: 
+  location: 
+  role_description: 
+

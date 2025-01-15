@@ -60,6 +60,7 @@ Contributions are welcome! If you encounter any bugs or have suggestions for imp
 
 ## *Future Improvements**
    Refactor Code: Clean up and optimize the code for better maintainability.
+   Use sentiment analysis instead of fuzzy search: Utilize natural language processing to match questions to workflows.
    Enhanced User Experience: Improve the script's ability to adapt to new workflows dynamically possibly utilizing agents.
    CAPTCHA Automation: Research and implement solutions for automating CAPTCHA challenges.
    Detailed Logs: Add logging to provide more visibility into the process.
