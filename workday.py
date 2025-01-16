@@ -129,9 +129,6 @@ class Workday:
                 EC.element_to_be_clickable(
                     (By.XPATH, "//button[text()='Sign Up' or text()='Create Account']")
                 )
-            )
-            self.driver.find_element(
-                By.XPATH, "//button[text()='Sign Up' or text()='Create Account']"
             ).click()
         except Exception as e:
             print("Exception: 'No button for Sigup'")
@@ -161,10 +158,6 @@ class Workday:
             #   self.driver.find_element(By.CSS_SELECTOR, "input[type='checkbox'][data-automation-id='createAccountCheckbox']").click()
             # except:
             #   print("Exception: 'There is no checkbox for signup'")
-            button = self.driver.find_element(
-                By.XPATH,
-                "//button[text()='Create Account']",
-            )
             self.wait.until(
                 EC.element_to_be_clickable(
                     (
@@ -172,11 +165,8 @@ class Workday:
                         "//button[text()='Create Account']",
                     )
                 )
-            )
-            time.sleep(1)
-            button.click()
+            ).click()
             time.sleep(2)
-            self.driver.switch_to.default_content()
         except Exception as e:
             print("Exception: 'Signup failed'", e)
             self.signin()
