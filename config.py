@@ -5,7 +5,6 @@ class Config:
     self.file = file
     self.profile = {}  # Example, this should be populated from file
     self.load_config()
-    self.companies_file = self.read_companies()
 
   def read_companies(self):
     companies_file = open("./config/companies.txt", 'r')
@@ -20,7 +19,7 @@ class Config:
     company_subdomains = self.read_companies()
     if company_subdomain in company_subdomains:
       return
-    companies_file = open(self.file, 'a+')
+    companies_file = open("./config/companies.txt", 'a+')
     companies_file.writelines("\n"+company_subdomain)
     companies_file.close()
 
