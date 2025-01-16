@@ -91,21 +91,30 @@ class Workday:
 
     def handle_date(self, element, _):
         try:
-            month_input = element.find_element(
-                By.CSS_SELECTOR,
-                "div[dateSectionMonth-display='dateSectionMonth-display'], div[data-automation-id='dateSectionMonth-display']",
+            month_input = self.wait.until(
+                EC.element_to_be_clickable(
+                    (
+                        By.CSS_SELECTOR,
+                        "div[dateSectionMonth-display='dateSectionMonth-display'], div[data-automation-id='dateSectionMonth-display']",
+                    )
+                )
             )
-            day_input = element.find_element(
-                By.CSS_SELECTOR,
-                "div[dateSectionDay-display='dateSectionDay-display'], div[data-automation-id='dateSectionDay-display']",
+            day_input = self.wait.until(
+                EC.element_to_be_clickable(
+                    (
+                        By.CSS_SELECTOR,
+                        "div[dateSectionDay-display='dateSectionDay-display'], div[data-automation-id='dateSectionDay-display']",
+                    )
+                )
             )
-            year_input = element.find_element(
-                By.CSS_SELECTOR,
-                "div[dateSectionYear-display='dateSectionYear-display'], div[data-automation-id='dateSectionYear-display']",
+            year_input = self.wait.until(
+                EC.element_to_be_clickable(
+                    (
+                        By.CSS_SELECTOR,
+                        "div[dateSectionYear-display='dateSectionYear-display'], div[data-automation-id='dateSectionYear-display']",
+                    )
+                )
             )
-            self.wait.until(EC.element_to_be_clickable(month_input))
-            self.wait.until(EC.element_to_be_clickable(day_input))
-            self.wait.until(EC.element_to_be_clickable(year_input))
             month_input.send_keys(datetime.now().strftime("%m"))
             day_input.send_keys(datetime.now().strftime("%d"))
             year_input.send_keys(datetime.now().strftime("%Y"))
@@ -170,6 +179,7 @@ class Workday:
             self.driver.switch_to.default_content()
         except Exception as e:
             print("Exception: 'Signup failed'", e)
+            self.signin()
 
     def signin(self):
         print("Signin")
@@ -291,7 +301,9 @@ class Workday:
                     question, parent
                 )
                 print("question tag name", question.tag_name, question.text)
-                print(container.tag_name, container.text)
+                print(
+                    container.tag_name, container.text, container.get_attribute("type")
+                )
                 automation_id = (
                     container.get_attribute("data-automation-id")
                     if not is_id
