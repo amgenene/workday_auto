@@ -10,6 +10,7 @@ from fuzzywuzzy import fuzz
 import os
 import re
 from StopWords import StopWords
+from sentence_transformers import SentenceTransformer, util
 
 stopwords = StopWords()
 
@@ -22,7 +23,7 @@ class Workday:
         self.driver = webdriver.Chrome()  # You need to have chromedriver installed
         self.wait = WebDriverWait(self.driver, 10)
         self.driver.maximize_window()
-
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
         # Modified data structure: list of tuples (keywords, action)
         self.questionsToActions = [
             (
@@ -52,7 +53,7 @@ class Workday:
             (["email"], self.fill_input, self.profile["email"]),
             (["address line 1"], self.fill_input, self.profile["address_line_1"]),
             (["city"], self.fill_input, self.profile["address_city"]),
-            (["state"], self.fill_input, self.profile["address_state"]),
+            (["state"], self.answer_dropdown, self.profile["address_state"]),
             (["postal Code"], self.fill_input, self.profile["address_postal_code"]),
             (["phone device type"], self.answer_dropdown, "Mobile"),
             (["phone number"], self.fill_input, self.profile["phone_number"]),
@@ -327,13 +328,19 @@ class Workday:
             best_match_action = None
             best_match_value = None
 
+            question_embedding = self.model.encode(
+                question_text, convert_to_tensor=True
+            )
             for keywords, action, value in self.questionsToActions:
-                for keyword in keywords:
-                    score = fuzz.partial_ratio(question_text.lower(), keyword.lower())
-                    if score > best_match_score:
-                        best_match_score = score
-                        best_match_action = action
-                        best_match_value = value
+                keyword_embeddings = self.model.encode(keywords, convert_to_tensor=True)
+                similarity_scores = util.pytorch_cos_sim(
+                    question_embedding, keyword_embeddings
+                )
+                max_score = similarity_scores.max().item()
+                if max_score > best_match_score:
+                    best_match_score = max_score
+                    best_match_action = action
+                    best_match_value = value
 
             if best_match_score > 75:  # Set a threshold for what you consider a "match"
                 print(
@@ -438,6 +445,8 @@ class Workday:
             except Exception as e:
                 print(f"Error logging in or creating acct: {e}")
                 input("Press Enter when you're ready to continue...")
+
+            time.sleep(6)
             p_tags = self.driver.find_elements(
                 By.XPATH, "//p[contains(text(), 'verify')]"
             )
@@ -446,14 +455,13 @@ class Workday:
                 input(
                     "Please verify your account and press Enter when you're ready to continue..."
                 )
-            time.sleep(6)
             step1 = self.fillform_page_1()
             if not step1:
                 input("Press Enter when you're ready to continue with page 1...")
             self.click_next()
             try:
                 current_page = 2
-                max_pages = 6  # Set this to your maximum number of pages
+                max_pages = 5  # Set this to your maximum number of pages
 
                 while current_page <= max_pages:
                     time.sleep(2)  # Brief pause between pages
@@ -524,55 +532,29 @@ class Workday:
         try:
             print("value being selected", values)
             # Click to open the dropdown
-            # self.driver.execute_script("arguments[0].click();", element)
+            self.driver.execute_script("arguments[0].click();", element)
             time.sleep(1)
-            element.click()
-            time.sleep(1)
-            options = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_all_elements_located(
-                    (By.CSS_SELECTOR, "ul[role='listbox'] >li[role='option']")
-                )
-            )
+
             # Find all options and look for a case-insensitive match
             options = self.driver.find_elements(
-                By.CSS_SELECTOR, "ul[role='listbox'] > li[role='option']"
-            ).click()
-            for li in options:
-                print(li.text)
-                for option in li.find_elements(By.TAG_NAME, "div"):
-                    resultwords = "".join(
-                        [
-                            word
-                            for word in re.split("\W+", option)
-                            if word.lower() not in stopwords.stopwords
-                        ]
-                    )
-
-                    if (
-                        option.text.lower() == values.lower()
-                        or option.text.lower().startswith(values.lower())
-                        or any(
-                            optionWord in valuesWord
-                            for optionWord in resultwords
-                            for valuesWord in values.lower().split()
-                        )
-                    ):
-                        self.driver.execute_script("arguments[0].click();", option)
-                        time.sleep(1)
-                        return True
-                # default to no
-                for option in li:
-                    if option.text.lower() == "no" or "no" in option.text.lower():
-                        self.driver.execute_script("arguments[0].click();", option)
-                        time.sleep(1)
-                        return True
+                By.CSS_SELECTOR, "ul[role='listbox'] li[role='option'] div"
+            )
+            for option in options:
+                print("values:", values.lower(), option.text.lower())
+                if (
+                    option.text.lower() == values.lower()
+                    or option.text.lower().startswith(values.lower())
+                ):
+                    self.driver.execute_script("arguments[0].click();", option)
+                    time.sleep(1)
+                    return True
             print(f"Could not find option: {values}")
             print("Available options:", [opt.text for opt in options])
             return False
         except Exception as e:
             print(f"Error in answer_dropdown: {e}")
             # Fallback try to call select_radio if this fails
-            self.select_radio(element, _, values)
+            # self.select_radio(element, _, values)
             return False
 
     def fill_input(self, element, data_automation_id, values=[]):
@@ -631,6 +613,7 @@ class Workday:
             )
             for option in radio_options:
                 try:
+                    print("option.text", option.text)
                     # Get the label text to match against our value
                     label = option.find_element(By.CSS_SELECTOR, "label").text.strip()
                     label = " ".join(
@@ -675,7 +658,7 @@ class Workday:
 
         except Exception as e:
             print(f"Error in select_radio: {e}")
-            self.answer_dropdown(element, data_automation_id, values)
+            # self.answer_dropdown(element, data_automation_id, values)
             return False
 
 
