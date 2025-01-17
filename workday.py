@@ -8,6 +8,10 @@ from config import Config
 from datetime import datetime
 from fuzzywuzzy import fuzz
 import os
+import re
+from StopWords import StopWords
+
+stopwords = StopWords()
 
 
 class Workday:
@@ -48,6 +52,7 @@ class Workday:
             (["email"], self.fill_input, self.profile["email"]),
             (["address line 1"], self.fill_input, self.profile["address_line_1"]),
             (["city"], self.fill_input, self.profile["address_city"]),
+            (["state"], self.fill_input, self.profile["address_state"]),
             (["postal Code"], self.fill_input, self.profile["address_postal_code"]),
             (["phone device type"], self.answer_dropdown, "Mobile"),
             (["phone number"], self.fill_input, self.profile["phone_number"]),
@@ -67,6 +72,11 @@ class Workday:
             (["gender"], self.answer_dropdown, "Male"),
             (
                 ["ethnicity"],
+                self.answer_dropdown,
+                "Black or African American (United States of America)",
+            ),
+            (
+                ["What is your race"],
                 self.answer_dropdown,
                 "Black or African American (United States of America)",
             ),
@@ -95,7 +105,7 @@ class Workday:
                 EC.element_to_be_clickable(
                     (
                         By.CSS_SELECTOR,
-                        "div[dateSectionMonth-display='dateSectionMonth-display'], div[data-automation-id='dateSectionMonth-display']",
+                        "div[data-automation-id='dateSectionMonth-display']",
                     )
                 )
             )
@@ -103,7 +113,7 @@ class Workday:
                 EC.element_to_be_clickable(
                     (
                         By.CSS_SELECTOR,
-                        "div[dateSectionDay-display='dateSectionDay-display'], div[data-automation-id='dateSectionDay-display']",
+                        "div[data-automation-id='dateSectionDay-display']",
                     )
                 )
             )
@@ -111,7 +121,7 @@ class Workday:
                 EC.element_to_be_clickable(
                     (
                         By.CSS_SELECTOR,
-                        "div[dateSectionYear-display='dateSectionYear-display'], div[data-automation-id='dateSectionYear-display']",
+                        "div[data-automation-id='dateSectionYear-display']",
                     )
                 )
             )
@@ -125,21 +135,24 @@ class Workday:
     def signup(self):
         print("Signup")
         try:
-            self.wait.until(
+            redirect = self.wait.until(
                 EC.element_to_be_clickable(
-                    (By.XPATH, "//button[text()='Sign Up' or text()='Create Account']")
+                    (
+                        By.XPATH,
+                        "//button[text()='Sign Up' or text()='Create Account']",
+                    )
                 )
-            ).click()
+            )
+            redirect.click()
         except Exception as e:
             print("Exception: 'No button for Sigup'")
         try:
+            time.sleep(5)
             form = self.wait.until(EC.presence_of_element_located((By.XPATH, "//form")))
-            checkbox = form.find_element(
-                By.CSS_SELECTOR, "input[data-automation-id='createAccountCheckbox']"
-            )
+            checkbox = form.find_element(By.XPATH, "//input[@type='checkbox']")
+            print("here")
             checkbox.click()
-
-        # Find the button and click it
+            time.sleep(1)
         except Exception as e:
             print(f"Error: {str(e)}")
         try:
@@ -154,18 +167,20 @@ class Workday:
                 By.CSS_SELECTOR,
                 "input[type='password'][data-automation-id='verifyPassword']",
             ).send_keys(self.profile["password"])
-            # try:
-            #   self.driver.find_element(By.CSS_SELECTOR, "input[type='checkbox'][data-automation-id='createAccountCheckbox']").click()
-            # except:
-            #   print("Exception: 'There is no checkbox for signup'")
-            self.wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        "//button[text()='Create Account']",
-                    )
+            try:
+                button = self.driver.find_element(
+                    By.CSS_SELECTOR,
+                    "div[role='button'][aria-label='Create Account'][data-automation-id='click_filter']",
                 )
-            ).click()
+                button.click()
+            except Exception as e:
+                print("Exception: 'No button for Create Account'", e)
+                button1 = self.wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))
+                )
+                print(button1.is_displayed())  # Check if button is visible
+                print(button1.is_enabled())  # Check if button is clickable
+                self.driver.execute_script("arguments[0].click();", button1)
             time.sleep(2)
         except Exception as e:
             print("Exception: 'Signup failed'", e)
@@ -186,7 +201,7 @@ class Workday:
         except Exception as e:
             print(f"Error form error: {str(e)}")
         try:
-
+            time.sleep(2)
             self.driver.find_element(
                 By.CSS_SELECTOR, "input[type='text'][data-automation-id='email']"
             ).send_keys(self.profile["email"])
@@ -374,9 +389,10 @@ class Workday:
             print("No Errors")
         time.sleep(10)
 
-    def apply(self, company):
+    def apply(self):
         try:
             parsed_url = urlparse(self.url)
+            print("parsed_url:", parsed_url)
             company = parsed_url.netloc.split(".")[0]
             existing_company = company in self.config.read_companies()
             print("company subdomain:", company)
@@ -393,7 +409,13 @@ class Workday:
                 time.sleep(2)
             except Exception as e:
                 print("No Apply button found, continuing...", e)
-
+            try:
+                already_applied = self.driver.find_element(
+                    By.CSS_SELECTOR, "[data-automation-id='alreadyApplied']"
+                )
+                return True
+            except Exception as e:
+                print("No already applied found, continuing...", e)
             # Try autofill with resume
             try:
                 button = self.driver.find_element(
@@ -407,6 +429,7 @@ class Workday:
 
             print("existing_company:", existing_company)
             try:
+                time.sleep(2)
                 if existing_company:
                     self.signin()
                 else:
@@ -430,7 +453,7 @@ class Workday:
             self.click_next()
             try:
                 current_page = 2
-                max_pages = 7  # Set this to your maximum number of pages
+                max_pages = 6  # Set this to your maximum number of pages
 
                 while current_page <= max_pages:
                     time.sleep(2)  # Brief pause between pages
@@ -477,16 +500,20 @@ class Workday:
     def handle_multiselect(self, element, _, values=[]):
         """Handle multi-select dropdowns that require multiple clicks"""
         try:
-            # Click to open the dropdown
-            element.click()
+            input_element = element.find_element(By.XPATH, "//div//input")
+            input_element.send_keys("Linkedin")
+            self.driver.execute_script("arguments[0].click();", input_element)
             time.sleep(1)
+            # Click to open the dropdown
+            # element.click()
+            # time.sleep(1)
 
-            # Click each selection in order
-            for selection in values:
-                self.driver.find_element(
-                    By.XPATH, f"//div[text()='{selection}']"
-                ).click()
-                time.sleep(1)
+            # # Click each selection in order
+            # for selection in values:
+            #     self.driver.find_element(
+            #         By.XPATH, f"//div[text()='{selection}']"
+            #     ).click()
+            #     time.sleep(1)
             return True
         except Exception as e:
             print(f"Error in handle_multiselect: {e}")
@@ -497,27 +524,51 @@ class Workday:
         try:
             print("value being selected", values)
             # Click to open the dropdown
-            self.driver.execute_script("arguments[0].click();", element)
+            # self.driver.execute_script("arguments[0].click();", element)
             time.sleep(1)
-
+            element.click()
+            time.sleep(1)
+            options = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_all_elements_located(
+                    (By.CSS_SELECTOR, "ul[role='listbox'] >li[role='option']")
+                )
+            )
             # Find all options and look for a case-insensitive match
             options = self.driver.find_elements(
-                By.CSS_SELECTOR, "ul[role='listbox'] li[role='option'] div"
-            )
-            for option in options:
-                print("values:", values.lower(), option.text.lower())
-                if (
-                    option.text.lower() == values.lower()
-                    or option.text.lower().startswith(values.lower())
-                ):
-                    self.driver.execute_script("arguments[0].click();", option)
-                    time.sleep(1)
-                    return True
+                By.CSS_SELECTOR, "ul[role='listbox'] > li[role='option']"
+            ).click()
+            for li in options:
+                print(li.text)
+                for option in li.find_elements(By.TAG_NAME, "div"):
+                    resultwords = "".join(
+                        [
+                            word
+                            for word in re.split("\W+", option)
+                            if word.lower() not in stopwords.stopwords
+                        ]
+                    )
 
+                    if (
+                        option.text.lower() == values.lower()
+                        or option.text.lower().startswith(values.lower())
+                        or any(
+                            optionWord in valuesWord
+                            for optionWord in resultwords
+                            for valuesWord in values.lower().split()
+                        )
+                    ):
+                        self.driver.execute_script("arguments[0].click();", option)
+                        time.sleep(1)
+                        return True
+                # default to no
+                for option in li:
+                    if option.text.lower() == "no" or "no" in option.text.lower():
+                        self.driver.execute_script("arguments[0].click();", option)
+                        time.sleep(1)
+                        return True
             print(f"Could not find option: {values}")
             print("Available options:", [opt.text for opt in options])
             return False
-
         except Exception as e:
             print(f"Error in answer_dropdown: {e}")
             # Fallback try to call select_radio if this fails
@@ -582,8 +633,16 @@ class Workday:
                 try:
                     # Get the label text to match against our value
                     label = option.find_element(By.CSS_SELECTOR, "label").text.strip()
-
-                    if values.lower() in label.lower():
+                    label = " ".join(
+                        [
+                            word
+                            for word in re.split("\W+", label)
+                            if word.lower() not in stopwords.stopwords
+                        ]
+                    )
+                    if any(
+                        value in l for value in values.lower() for l in label.lower()
+                    ):
                         # Find the actual radio input within this option
                         radio_input = option.find_element(
                             By.CSS_SELECTOR, 'input[type="radio"]'
@@ -646,7 +705,7 @@ def main():
         print(f"\nProcessing job {i}/{len(urls)}: {url}")
         try:
             workday = Workday(url)
-            workday.apply(url)
+            workday.apply()
             print(f"Completed job {i}/{len(urls)}")
         except Exception as e:
             print(f"Error processing job {url}: {e}")
