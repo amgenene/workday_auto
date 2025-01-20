@@ -1,17 +1,20 @@
 import time
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+
+# from selenium import webdriver
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.support import expected_conditions as EC
 from urllib.parse import urlparse
 from config import Config
 from datetime import datetime
-from fuzzywuzzy import fuzz
+from typing import List, Tuple, Optional
 import os
 import re
 from StopWords import StopWords
 from sentence_transformers import SentenceTransformer, util
 from operator import itemgetter
+import asyncio
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
 stopwords = StopWords()
 
@@ -21,9 +24,7 @@ class Workday:
         self.url = url
         self.config = Config("./config/profile.yaml")
         self.profile = self.config.profile
-        self.driver = webdriver.Chrome()  # You need to have chromedriver installed
-        self.wait = WebDriverWait(self.driver, 10)
-        self.driver.maximize_window()
+        self.page = None
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
         # Modified data structure: list of tuples (keywords, action)
         self.questionsToActions = [
@@ -101,209 +102,233 @@ class Workday:
             ),
         ]
 
-    def select_checkbox(self, element, data_automation_id):
-        radio_button = element.find_element(By.CSS_SELECTOR, f'input[type="checkbox"]')
-        self.wait.until(EC.element_to_be_clickable(radio_button))
-        radio_button.click()
+    @classmethod
+    async def create(cls, url: str):
+        """Factory method to create and initialize an AsyncWorkday instance"""
+        self = cls(url)
+        await self.initialize()
+        return self
 
-    def handle_date(self, element, _):
+    async def initialize(self):
+        self.playwright = await async_playwright().start()
+        self.browser = await self.playwright.chromium.launch(headless=False)
+        self.context = await self.browser.new_context()
+        self.page = await self.context.new_page()
+        await self.page.set_viewport_size({"width": 1800, "height": 1964})
+
+    async def close_browser(self):
+        if self.page:
+            await self.page.close()
+        if self.context:
+            await self.context.close()
+        if self.browser:
+            await self.browser.close()
+        if self.playwright:
+            await self.playwright.stop()
+
+    async def wait_for_navigation(self):
         try:
-            month_input = self.wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.CSS_SELECTOR,
-                        "div[data-automation-id='dateSectionMonth-display']",
-                    )
-                )
+            await self.page.wait_for_load_state("networkidle")
+        except PlaywrightTimeout:
+            pass
+
+    async def select_checkbox(self, element, data_automation_id):
+        radio_button = element.query_selector(f'input[type="checkbox"]')
+        await radio_button.wait_for_element_state("enabled")
+        await radio_button.click()
+
+    async def handle_date(self, element, _):
+        try:
+            month_input = await self.page.query_selector(
+                "div[data-automation-id='dateSectionMonth-display']",
             )
-            day_input = self.wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.CSS_SELECTOR,
-                        "div[data-automation-id='dateSectionDay-display']",
-                    )
-                )
+
+            day_input = await self.page.query_selector(
+                "div[data-automation-id='dateSectionDay-display']",
             )
-            year_input = self.wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.CSS_SELECTOR,
-                        "div[data-automation-id='dateSectionYear-display']",
-                    )
-                )
+
+            year_input = await self.page.query_selector(
+                "div[data-automation-id='dateSectionYear-display']",
             )
-            month_input.send_keys(datetime.now().strftime("%m"))
-            day_input.send_keys(datetime.now().strftime("%d"))
-            year_input.send_keys(datetime.now().strftime("%Y"))
+            await month_input.wait_for_element_state("enabled")
+            await month_input.type(datetime.now().strftime("%m"))
+            await month_input.click()
+            await asyncio.sleep(1)
+            await day_input.wait_for_element_state("enabled")
+            await day_input.click()
+            await day_input.type(datetime.now().strftime("%d"))
+            await asyncio.sleep(1)
+            await year_input.wait_for_element_state("enabled")
+            await year_input.click()
+            await year_input.type(datetime.now().strftime("%Y"))
+            await self.page.keyboard.press("Enter")
+            await asyncio.sleep(1)
         except Exception as e:
             print("Exception: 'No date input'", e)
         return True
 
-    def signup(self):
+    async def signup(self):
         print("Signup")
         try:
-            redirect = self.wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        "//button[text()='Sign Up' or text()='Create Account']",
-                    )
-                )
+            redirect = await self.page.query_selector(
+                "xpath=//button[text()='Sign Up' or text()='Create Account']",
             )
-            redirect.click()
+            await redirect.wait_for_element_state("enabled")
+            await redirect.click()
         except Exception as e:
             print("Exception: 'No button for Sigup'")
         try:
-            time.sleep(5)
-            form = self.wait.until(EC.presence_of_element_located((By.XPATH, "//form")))
-            checkbox = form.find_element(By.XPATH, "//input[@type='checkbox']")
+            await asyncio.sleep(5)
+            form = await self.page.query_selector("xpath=//form")
+            await form.wait_for_element_state("visible")
+            checkbox = await form.query_selector("xpath=//input[@type='checkbox']")
             print("here")
-            checkbox.click()
-            time.sleep(1)
+            await checkbox.click()
+            await asyncio.sleep(1)
         except Exception as e:
             print(f"Error: {str(e)}")
         try:
-            time.sleep(2)
-            self.driver.find_element(
-                By.CSS_SELECTOR, "input[type='text'][data-automation-id='email']"
-            ).send_keys(self.profile["email"])
-            self.driver.find_element(
-                By.CSS_SELECTOR, "input[type='password'][data-automation-id='password']"
-            ).send_keys(self.profile["password"])
-            self.driver.find_element(
-                By.CSS_SELECTOR,
-                "input[type='password'][data-automation-id='verifyPassword']",
-            ).send_keys(self.profile["password"])
+            await asyncio.sleep(2)
+            email = await self.page.query_selector(
+                "input[type='text'][data-automation-id='email']"
+            )
+            await email.fill(self.profile["email"])
+            password = await self.page.query_selector(
+                "input[type='password'][data-automation-id='password']"
+            )
+            await password.fill(self.profile["password"])
+            verify_password = await self.page.query_selector(
+                "input[type='password'][data-automation-id='verifyPassword']"
+            )
+            await verify_password.fill(self.profile["password"])
             try:
-                button = self.driver.find_element(
-                    By.CSS_SELECTOR,
+                button = await self.page.query_selector(
                     "div[role='button'][aria-label='Create Account'][data-automation-id='click_filter']",
                 )
-                button.click()
+                await button.click()
             except Exception as e:
                 print("Exception: 'No button for Create Account'", e)
-                button1 = self.wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))
+                button1 = await self.page.query_selector(
+                    "xpath=//button[@type='submit']"
                 )
-                print(button1.is_displayed())  # Check if button is visible
-                print(button1.is_enabled())  # Check if button is clickable
-                self.driver.execute_script("arguments[0].click();", button1)
-            time.sleep(2)
+
+                await button1.wait_for_element_state("enabled")
+                self.page.execute_script("arguments[0].click();", button1)
+            await asyncio.sleep(2)
         except Exception as e:
             print("Exception: 'Signup failed'", e)
             self.signin()
 
-    def signin(self):
+    async def signin(self):
         print("Signin")
         try:
-            self.wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//button[text()='Sign In']"))
-            )
-            self.driver.find_element(By.XPATH, "//button[text()='Sign In']").click()
+            button = await self.page.query_selector("xpath=//button[text()='Sign In']")
+            await button.wait_for_element_state("enabled")
+            await button.click()
+
         except Exception as e:
             print("Exception: 'No button for Sigin'")
-        time.sleep(5)
+        await asyncio.sleep(5)
         try:
-            form = self.wait.until(EC.presence_of_element_located((By.XPATH, "//form")))
+            form = await self.page.query_selector("xpath=//form")
+            await form.wait_for_element_state("visible")
         except Exception as e:
             print(f"Error form error: {str(e)}")
         try:
-            time.sleep(2)
-            self.driver.find_element(
-                By.CSS_SELECTOR, "input[type='text'][data-automation-id='email']"
-            ).send_keys(self.profile["email"])
-            self.driver.find_element(
-                By.CSS_SELECTOR, "input[type='password'][data-automation-id='password']"
-            ).send_keys(self.profile["password"])
-            button = self.wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.CSS_SELECTOR,
-                        "div[role='button'][aria-label='Sign In'][data-automation-id='click_filter']",
-                    )
-                )
+            await asyncio.sleep(2)
+            email = await self.page.query_selector(
+                "input[type='text'][data-automation-id='email']"
             )
-            time.sleep(1)
-            button.click()
+            await email.fill(self.profile["email"])
+            password = await self.page.query_selector(
+                "input[type='password'][data-automation-id='password']"
+            )
+            await password.fill(self.profile["password"])
+            button = await self.page.query_selector(
+                "div[role='button'][aria-label='Sign In'][data-automation-id='click_filter']"
+            )
+            await asyncio.sleep(1)
+            await button.click()
         except Exception as e:
             print("Exception: 'Signin failed'", e)
 
-    def find_next_sibling_safely(self, start_element, parent, max_levels=5):
+    async def find_next_sibling_safely(self, start_element, parent, max_levels=5):
         """
-        Safely navigate up the DOM tree and find the next sibling div,
-        checking for elements at each level before proceeding.
-
-        Args:
-            start_element: WebElement - The starting element
-            max_levels: int - Maximum number of levels to traverse up
-
-        Returns:
-            tuple: (WebElement or None, int) - Found element and levels traversed
+        Safely navigate up the DOM tree and find the next sibling div using Playwright
         """
         try:
             current = start_element
             for level in range(max_levels):
-                print(f"Current level: {current.tag_name, current.text}")
-                # First check if there's a sibling at current level
-                siblings = current.find_elements(
-                    By.XPATH,
-                    "./following-sibling::div//*[@data-automation-id][position()=1]",
+                print(
+                    f"Current level: {await current.evaluate('el => `${el.tagName}, ${el.textContent}`')}"
                 )
-                if siblings:
-                    print(f"Found sibling at level {level}")
-                    return siblings[0], level, False
-                print("HEREE1")
-                if not siblings:
-                    print("HEREE")
-                    siblings = current.find_elements(
-                        By.XPATH, "./following-sibling::div//*[@id][position()=1]"
+
+            # Check for siblings at current level
+            siblings = await current.query_selector_all(
+                "xpath=./following-sibling::div//*[@data-automation-id][position()=1]"
+            )
+            if siblings and len(siblings) > 0:
+                print(f"Found sibling at level {level}")
+                return siblings[0], level, False
+
+            if not siblings:
+                siblings = await current.query_selector_all(
+                    "xpath=./following-sibling::div//*[@id][position()=1]"
+                )
+                if siblings and len(siblings) > 0:
+                    print(
+                        f"Found sibling at level {level} sibling container: {await siblings[0].evaluate('el => `${el.tagName}, ${el.textContent}`')}"
                     )
-                    if siblings:
-                        print(
-                            f"Found sibling at level {level} sibling container: {siblings[0].tag_name, siblings[0].text}"
-                        )
-                        return siblings[0], level, True
-                # If no siblings, try to go up one level
-                try:
-                    # Verify we actually moved up (parent should be different from current)
-                    if parent.data_automation_id == current.data_automation_id:
-                        print(f"Reached same element at level {level}, stopping")
-                        return None, level, False
-                except:
-                    print(f"didn't find parent at level: {level} Continue")
-                current = current.find_element(By.XPATH, "./..")
-            return None, max_levels, False
+                    return siblings[0], level, True
+
+            # Try to go up one level
+            try:
+                # Get parent element
+                parent_automation_id = await parent.get_attribute("data-automation-id")
+                current_automation_id = await current.get_attribute(
+                    "data-automation-id"
+                )
+
+                if parent_automation_id == current_automation_id:
+                    print(f"Reached same element at level {level}, stopping")
+                    return None
+            except:
+                print(f"didn't find parent at level: {level} Continue")
+
+            current = await current.query_selector("xpath=./..")
 
         except Exception as e:
             print(f"Error in safe navigation: {e}")
-            return None, 0, False
+            return None
+        return None
 
-    def fillform_page_1(self):
+    async def fillform_page_1(self):
         try:
-            self.driver.find_element(
-                By.CSS_SELECTOR, "input[data-automation-id='file-upload-input-ref']"
-            ).send_keys(self.profile["resume_path"])
-            time.sleep(1)
+            resume_input = await self.page.query_selector(
+                "input[data-automation-id='file-upload-input-ref']"
+            )
+            await resume_input.set_input_files(self.profile["resume_path"])
+            await asyncio.sleep(1)
         except Exception as e:
             print("Exception: 'Missmatch in order'", e)
             return False
         return True
 
-    def handle_questions(self, step):
-        required_fields = self.driver.find_elements(By.XPATH, "//abbr[text()='*']")
+    async def handle_questions(self, step):
+        required_fields = await self.page.query_selector_all("xpath=//abbr[text()='*']")
         questions = []
         print(f"\nFound {len(required_fields)} required fields")
 
         for field in required_fields[1:]:
             try:
                 # Get the parent span containing the question text
-                question = field.find_element(By.XPATH, "./..")
-                question_text = question.text
+                question = field.query_selector("xpath=./..")
+                question_text = question.text_content()
                 if not question_text:
                     continue
                 # Get the parent div that would contain both question and input area
-                parent = question.find_element(
-                    By.XPATH, "./ancestor::div[@data-automation-id][position()=1]"
+                parent = question.query_selector(
+                    "xpath=./ancestor::div[@data-automation-id][position()=1]"
                 )
                 print(
                     f"Parent automation-id: {parent.get_attribute('data-automation-id')}"
@@ -377,7 +402,7 @@ class Workday:
                     if best_match_value is not None
                     else best_match_action(input_element, automation_id)
                 )
-                time.sleep(6)
+                await asyncio.sleep(6)
                 if action_result:
                     print(f"Action successful: {best_match_action}")
                 else:
@@ -399,73 +424,70 @@ class Workday:
         input("Press Enter to continue after reviewing the questions...")
         return True
 
-    def click_next(self):
+    async def click_next(self):
         try:
-            button = self.wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.XPATH,
-                        "//button[text()='Next' or text()='Continue' or text()='Submit' or text()='Save and Continue' or text()='Review and Submit']",
-                    )
-                )
+            button = await self.page.query_selector(
+                "xpath=//button[text()='Next' or text()='Continue' or text()='Submit' or text()='Save and Continue' or text()='Review and Submit']",
             )
-            button.click()
+            await button.wait_for_element_state("enabled")
+            await button.click()
         except Exception as e:
             print("Exception: 'No button for Next please continue'")
-        time.sleep(5)
+        await asyncio.sleep(5)
         try:
-            error_button = self.driver.find_element(
-                By.CSS_SELECTOR, "button[data-automation-id='errorBanner']"
+            error_button = await self.page.query_selector(
+                "button[data-automation-id='errorBanner']"
             )
             print(
                 "Exception: 'Errors on page. Please resolve and submit manually. You have 60 seconds to do so!'"
             )
-            time.sleep(60)
+            await asyncio.sleep(60)
         except:
             print("No Errors")
-        time.sleep(10)
+        await asyncio.sleep(10)
 
-    def apply(self):
+    async def apply(self):
         try:
             parsed_url = urlparse(self.url)
             print("parsed_url:", parsed_url)
             company = parsed_url.netloc.split(".")[0]
             existing_company = company in self.config.read_companies()
             print("company subdomain:", company)
-            self.driver.get(self.url)  # Open a webpage
-            time.sleep(4)
+            await self.page.goto(self.url)  # Open a webpage
+            await asyncio.sleep(4)
 
             # Try to click the Apply button
             try:
-                apply_button = self.driver.find_element(
-                    By.CSS_SELECTOR,
+                apply_button = await self.page.query_selector(
                     "a[role='button'][data-uxi-element-id='Apply_adventureButton']",
                 )
-                apply_button.click()
-                time.sleep(2)
+                await apply_button.wait_for_element_state("enabled")
+                await apply_button.click()
+                await asyncio.sleep(2)
             except Exception as e:
                 print("No Apply button found, continuing...", e)
             try:
-                already_applied = self.driver.find_element(
-                    By.CSS_SELECTOR, "[data-automation-id='alreadyApplied']"
+                print("Try already applied")
+                already_applied = await self.page.query_selector(
+                    "[data-automation-id='alreadyApplied']"
                 )
                 return True
             except Exception as e:
                 print("No already applied found, continuing...", e)
             # Try autofill with resume
             try:
-                button = self.driver.find_element(
-                    By.CSS_SELECTOR,
+                print("Try autofill with resume")
+                button = await self.page.query_selector(
                     "a[role='button'][data-automation-id='autofillWithResume']",
                 )
-                button.click()
-                time.sleep(2)
+                await button.click()
+                asyncio.sleep(2)
             except Exception as e:
                 print("No autofill resume button found", e)
 
             print("existing_company:", existing_company)
             try:
-                time.sleep(2)
+                await asyncio.sleep(2)
                 if existing_company:
                     self.signin()
                 else:
@@ -475,9 +497,9 @@ class Workday:
                 print(f"Error logging in or creating acct: {e}")
                 input("Press Enter when you're ready to continue...")
 
-            time.sleep(6)
-            p_tags = self.driver.find_elements(
-                By.XPATH, "//p[contains(text(), 'verify')]"
+            await asyncio.sleep(6)
+            p_tags = await self.page.query_selectors(
+                "xpath=//p[contains(text(), 'verify')]"
             )
             if len(p_tags) > 0:
                 print("Verification needed")
@@ -493,7 +515,7 @@ class Workday:
                 max_pages = 5  # Set this to your maximum number of pages
 
                 while current_page <= max_pages:
-                    time.sleep(2)  # Brief pause between pages
+                    await asyncio.sleep(2)  # Brief pause between pages
 
                     try:
                         if current_page == 3:
@@ -523,79 +545,65 @@ class Workday:
 
                 # After all pages are done
                 print("Form completion finished")
-                self.driver.quit()
+                self.page.quit()
             except Exception as e:
                 print(f"Fatal error in form processing: {e}")
-                self.driver.quit()
+                self.page.quit()
                 return False
         except Exception as e:
             print(f"Error in early form processing: {e}")
-            self.driver.quit()
+            self.page.quit()
             return False
         return True
 
-    def handle_multiselect(self, element, _, values):
+    async def handle_multiselect(self, element, _, values):
         """Handle multi-select dropdowns that require multiple clicks"""
         try:
-            input_element = element.find_element(By.XPATH, "//div//input")
-            input_element.send_keys(values)
-            # self.driver.execute_script("arguments[0].click();", input_element)
-            time.sleep(1)
-            # Click to open the dropdown
-            # element.click()
-            # time.sleep(1)
-
-            # # Click each selection in order
-            # for selection in values:
-            #     self.driver.find_element(
-            #         By.XPATH, f"//div[text()='{selection}']"
-            #     ).click()
-            #     time.sleep(1)
+            await element.click()
+            await asyncio.sleep(0.5)
+            await self.page.keyboard.type(values)
+            await asyncio.sleep(0.5)
+            await self.page.keyboard.press("Enter")
             return True
         except Exception as e:
             print(f"Error in handle_multiselect: {e}")
-        try:
-            self.answer_dropdown(element, _, values)
-        except Exception as e:
-            print(f"Error in using answer_dropdown: {e}")
-            return False
+            try:
+                self.answer_dropdown(element, _, values)
+            except Exception as e:
+                print(f"Error in using answer_dropdown: {e}")
+                return False
 
-    def answer_dropdown(self, element, _, values=""):
+    async def answer_dropdown(self, element, _, values=""):
         """Handle single-select dropdowns"""
         try:
-            print("value being selected", values)
-            # Click to open the dropdown
-            self.driver.execute_script("arguments[0].click();", element)
-            time.sleep(1)
+            await element.click()
+            await asyncio.sleep(0.5)
 
-            # Find all options and look for a case-insensitive match
-            options = self.driver.find_elements(
-                By.CSS_SELECTOR, "ul[role='listbox'] li[role='option'] div"
+            options = await self.page.query_selector_all(
+                "ul[role='listbox'] li[role='option'] div"
             )
             if values != "unknown":
                 for option in options:
-                    print("values:", values.lower(), option.text.lower())
+                    option_text = await option.text_content()
                     if (
-                        option.text.lower() == values.lower()
-                        or option.text.lower().startswith(values.lower())
+                        option_text.lower() == values.lower()
+                        or option_text.lower().startswith(values.lower())
                     ):
-                        self.driver.execute_script("arguments[0].click();", option)
-                    time.sleep(1)
-                    return True
+                        await option.click()
+                        return True
             else:
-                self.driver.execute_script("arguments[0].click();", options[-1])
-                time.sleep(1)
-                print(f"Could not find option so selected the last option...: {values}")
-                print("Available options:", [opt.text for opt in options])
-                return False
-
+                await options[-1].click()
+            return False
+        except Exception as e:
+            print(f"Error in answer_dropdown: {e}")
+            return False
         except Exception as e:
             print(f"Error in answer_dropdown: {e}")
             # Fallback try to call select_radio if this fails
             # self.select_radio(element, _, values)
             return False
 
-    def fill_input(self, element, data_automation_id, values=[]):
+    async def fill_input(self, element, data_automation_id, values=[]):
         """Handle text input fields"""
         current_value = element.get_attribute("value")
         if current_value == str(values):
@@ -605,24 +613,24 @@ class Workday:
             print(f"Input value: {values}")
             # Clear the existing value
             element.clear()
-            time.sleep(1)
+            await asyncio.sleep(1)
             element = None
             try:
-                element = self.driver.find_element(
-                    By.CSS_SELECTOR, f"input[data-automation-id='{data_automation_id}']"
+                element = await self.page.query_selector(
+                    f"input[data-automation-id='{data_automation_id}']"
                 )
             except:
-                element = self.driver.find_element(By.ID, f"{data_automation_id}")
-            self.wait.until(EC.element_to_be_clickable(element))
-            # Send the new value
-            element.send_keys(values)
-            time.sleep(1)
-            return True
+                element = await self.page.query_selector(f"#{data_automation_id}")
+                await element.wait_for_element_state("enabled")
+                # Send the new value
+                await element.fill(values)
+                await asyncio.sleep(1)
+                return True
         except Exception as e:
             print(f"Error in fill_input: {e}")
             return False
 
-    def select_radio(self, element, data_automation_id, values=""):
+    async def select_radio(self, element, data_automation_id, values=""):
         """
         Handle radio button selections with the specific Workday HTML structure
         """
@@ -640,20 +648,18 @@ class Workday:
             # Find the container with the radio group
             radio_group = self.wait.until(
                 EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, f'div[data-automation-id="{data_automation_id}"]')
+                    (f'div[data-automation-id="{data_automation_id}"]')
                 )
                 if not has_id
                 else EC.presence_of_element_located((By.ID, f"{data_automation_id}"))
             )
             # Find all radio options within the group
-            radio_options = radio_group.find_elements(
-                By.CSS_SELECTOR, 'div[class*="css-1utp272"]'
-            )
+            radio_options = radio_group.query_selectors('div[class*="css-1utp272"]')
             for option in radio_options:
                 try:
                     print("option.text", option.text)
                     # Get the label text to match against our value
-                    label = option.find_element(By.CSS_SELECTOR, "label").text.strip()
+                    label = option.query_selector("label").text.strip()
                     label = " ".join(
                         [
                             word
@@ -665,20 +671,18 @@ class Workday:
                         value in l for value in values.lower() for l in label.lower()
                     ):
                         # Find the actual radio input within this option
-                        radio_input = option.find_element(
-                            By.CSS_SELECTOR, 'input[type="radio"]'
-                        )
+                        radio_input = option.query_selector('input[type="radio"]')
 
                         # Try to click the label first (often more reliable than clicking the input directly)
                         try:
-                            option.find_element(By.CSS_SELECTOR, "label").click()
+                            await option.query_selector("label").click()
                         except:
                             # If label click fails, try JavaScript click on the input
-                            self.driver.execute_script(
+                            self.page.execute_script(
                                 "arguments[0].click();", radio_input
                             )
 
-                        time.sleep(1)
+                        await asyncio.sleep(1)
                         return True
                 except Exception as e:
                     print(f"Error with option: {e}")
@@ -687,10 +691,7 @@ class Workday:
             print(f"No matching radio option found for value: {values}")
             print(
                 "Available options:",
-                [
-                    opt.find_element(By.CSS_SELECTOR, "label").text
-                    for opt in radio_options
-                ],
+                [opt.query_selector("label").text for opt in radio_options],
             )
             return False
 
@@ -700,7 +701,7 @@ class Workday:
             return False
 
 
-def main():
+async def main():
     # Path to jobs.txt file
     jobs_file = os.path.join(os.path.dirname(__file__), "config", "jobs.txt")
 
@@ -725,16 +726,16 @@ def main():
     for i, url in enumerate(urls, 1):
         print(f"\nProcessing job {i}/{len(urls)}: {url}")
         try:
-            workday = Workday(url)
-            workday.apply()
+            workday = await Workday(url).create(url)
+            await workday.apply()
             print(f"Completed job {i}/{len(urls)}")
         except Exception as e:
             print(f"Error processing job {url}: {e}")
         print("\nWaiting 30 seconds before next application...")
-        time.sleep(30)
+        input("Press Enter to continue...")
 
     print("\nAll jobs processed!")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
