@@ -383,6 +383,11 @@ class Workday:
                 else:
                     print(f"Action failed: {best_match_action}")
                 handled = True
+            if not handled and step == 4:
+                action_result = self.answer_dropdown(
+                    input_element, automation_id, values="unknown"
+                )
+
             if not handled:
                 print(
                     f"No matching action found for question: {question_text}. Please fill manually"
@@ -494,7 +499,7 @@ class Workday:
                         if current_page == 3:
                             success = True  # skip page 3 because it's just reading from the resume
                         else:
-                            success = self.handle_questions()
+                            success = self.handle_questions(current_page)
                         if success:
                             print(f"Successfully completed page {current_page}")
                             self.click_next()
@@ -549,6 +554,10 @@ class Workday:
             return True
         except Exception as e:
             print(f"Error in handle_multiselect: {e}")
+        try:
+            self.answer_dropdown(element, _, values)
+        except Exception as e:
+            print(f"Error in using answer_dropdown: {e}")
             return False
 
     def answer_dropdown(self, element, _, values=""):
@@ -563,18 +572,23 @@ class Workday:
             options = self.driver.find_elements(
                 By.CSS_SELECTOR, "ul[role='listbox'] li[role='option'] div"
             )
-            for option in options:
-                print("values:", values.lower(), option.text.lower())
-                if (
-                    option.text.lower() == values.lower()
-                    or option.text.lower().startswith(values.lower())
-                ):
-                    self.driver.execute_script("arguments[0].click();", option)
+            if values != "unknown":
+                for option in options:
+                    print("values:", values.lower(), option.text.lower())
+                    if (
+                        option.text.lower() == values.lower()
+                        or option.text.lower().startswith(values.lower())
+                    ):
+                        self.driver.execute_script("arguments[0].click();", option)
                     time.sleep(1)
                     return True
-            print(f"Could not find option: {values}")
-            print("Available options:", [opt.text for opt in options])
-            return False
+            else:
+                self.driver.execute_script("arguments[0].click();", options[-1])
+                time.sleep(1)
+                print(f"Could not find option so selected the last option...: {values}")
+                print("Available options:", [opt.text for opt in options])
+                return False
+
         except Exception as e:
             print(f"Error in answer_dropdown: {e}")
             # Fallback try to call select_radio if this fails
