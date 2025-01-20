@@ -11,6 +11,7 @@ import os
 import re
 from StopWords import StopWords
 from sentence_transformers import SentenceTransformer, util
+from operator import itemgetter
 
 stopwords = StopWords()
 
@@ -29,7 +30,12 @@ class Workday:
             (
                 ["how did you hear about us"],
                 self.handle_multiselect,
-                ["Social Media", "LinkedIn"],
+                "LinkedIn",
+            ),
+            (
+                ["Country Phone Code"],
+                self.handle_multiselect,
+                "United States of America",
             ),
             (["Are you legally eligible to work"], self.answer_dropdown, "Yes"),
             (
@@ -264,7 +270,7 @@ class Workday:
                         print(f"Reached same element at level {level}, stopping")
                         return None, level, False
                 except:
-                    print(f"Cannot go up from level {level}")
+                    print(f"didn't find parent at level: {level} Continue")
                 current = current.find_element(By.XPATH, "./..")
             return None, max_levels, False
 
@@ -283,7 +289,7 @@ class Workday:
             return False
         return True
 
-    def handle_questions(self):
+    def handle_questions(self, step):
         required_fields = self.driver.find_elements(By.XPATH, "//abbr[text()='*']")
         questions = []
         print(f"\nFound {len(required_fields)} required fields")
@@ -322,6 +328,15 @@ class Workday:
                 print(f"Error processing field: {e}")
                 continue
 
+        keyword_embeddings = []
+        similarity_scores = []
+        embeddingsToActions = {}
+        # Initialize embeddingsToActions, and get keyword embeddings
+        for keywords, action, value in self.questionsToActions:
+            keyword_embedding = self.model.encode(keywords, convert_to_tensor=True)
+            keyword_embeddings.append(keyword_embedding)
+            embeddingsToActions[keyword_embedding] = (action, value)
+
         for question_text, input_element, automation_id in questions:
             handled = False
             best_match_score = 0
@@ -331,18 +346,27 @@ class Workday:
             question_embedding = self.model.encode(
                 question_text, convert_to_tensor=True
             )
-            for keywords, action, value in self.questionsToActions:
-                keyword_embeddings = self.model.encode(keywords, convert_to_tensor=True)
-                similarity_scores = util.pytorch_cos_sim(
-                    question_embedding, keyword_embeddings
+            similarity_scores = [
+                (
+                    float(
+                        util.pytorch_cos_sim(
+                            question_embedding, keyword_embedding
+                        ).mean()
+                    ),
+                    keyword_embedding,
                 )
-                max_score = similarity_scores.max().item()
-                if max_score > best_match_score:
-                    best_match_score = max_score
-                    best_match_action = action
-                    best_match_value = value
-
-            if best_match_score > 75:  # Set a threshold for what you consider a "match"
+                for keyword_embedding in keyword_embeddings
+            ]
+            max_score, keyword_embedding = max(similarity_scores, key=itemgetter(0))
+            print("keyword_embedding to action", embeddingsToActions[keyword_embedding])
+            if max_score > best_match_score:
+                best_match_score = max_score
+                best_match_action = embeddingsToActions[keyword_embedding][0]
+                best_match_value = embeddingsToActions[keyword_embedding][1]
+            print("best_match_score", best_match_score)
+            if (
+                best_match_score > 0.5
+            ):  # Set a threshold for what you consider a "match"
                 print(
                     f"Executing action for question: {question_text} with best match score of: {best_match_score}, {best_match_value}"
                 )
@@ -505,12 +529,12 @@ class Workday:
             return False
         return True
 
-    def handle_multiselect(self, element, _, values=[]):
+    def handle_multiselect(self, element, _, values):
         """Handle multi-select dropdowns that require multiple clicks"""
         try:
             input_element = element.find_element(By.XPATH, "//div//input")
-            input_element.send_keys("Linkedin")
-            self.driver.execute_script("arguments[0].click();", input_element)
+            input_element.send_keys(values)
+            # self.driver.execute_script("arguments[0].click();", input_element)
             time.sleep(1)
             # Click to open the dropdown
             # element.click()
