@@ -132,12 +132,12 @@ class Workday:
         except PlaywrightTimeout:
             pass
 
-    async def select_checkbox(self, element, data_automation_id):
-        radio_button = element.query_selector(f'input[type="checkbox"]')
+    async def select_checkbox(self, element, data_automation_id, is_id):
+        radio_button = await element.query_selector(f'input[type="checkbox"]')
         await radio_button.wait_for_element_state("enabled")
         await radio_button.click()
 
-    async def handle_date(self, element, _):
+    async def handle_date(self, element, _, is_id):
         try:
             month_input = await self.page.query_selector(
                 "div[data-automation-id='dateSectionMonth-display']",
@@ -171,7 +171,7 @@ class Workday:
         print("Signup")
         try:
             redirect = await self.page.query_selector(
-                "xpath=//button[text()='Sign Up' or text()='Create Account']",
+                "xpath=//button[contains(text(), 'Sign Up') or contains(text(), 'Create Account')]",
             )
             await redirect.wait_for_element_state("enabled")
             await redirect.click()
@@ -217,12 +217,14 @@ class Workday:
             await asyncio.sleep(2)
         except Exception as e:
             print("Exception: 'Signup failed'", e)
-            self.signin()
+            await self.signin()
 
     async def signin(self):
         print("Signin")
         try:
-            button = await self.page.query_selector("xpath=//button[text()='Sign In']")
+            button = await self.page.query_selector(
+                "xpath=//button[contains(text(), 'Sign In')]"
+            )
             await button.wait_for_element_state("enabled")
             await button.click()
 
@@ -262,45 +264,47 @@ class Workday:
                 print(
                     f"Current level: {await current.evaluate('el => `${el.tagName}, ${el.textContent}`')}"
                 )
-
-            # Check for siblings at current level
-            siblings = await current.query_selector_all(
-                "xpath=./following-sibling::div//*[@data-automation-id][position()=1]"
-            )
-            if siblings and len(siblings) > 0:
-                print(f"Found sibling at level {level}")
-                return siblings[0], level, False
-
-            if not siblings:
+                # Check for siblings at current level
                 siblings = await current.query_selector_all(
-                    "xpath=./following-sibling::div//*[@id][position()=1]"
+                    "xpath=./following-sibling::div//*[@data-automation-id][position()=1]"
                 )
+                print("HEREE1?")
                 if siblings and len(siblings) > 0:
-                    print(
-                        f"Found sibling at level {level} sibling container: {await siblings[0].evaluate('el => `${el.tagName}, ${el.textContent}`')}"
+                    print(f"Found sibling at level {level}")
+                    return siblings[0], level, False
+                print("HEREE2?")
+                if not siblings:
+                    siblings = await current.query_selector_all(
+                        "xpath=./following-sibling::div//*[@id][position()=1]"
                     )
-                    return siblings[0], level, True
+                    if siblings and len(siblings) > 0:
+                        print(
+                            f"Found sibling at level {level} sibling container: {await siblings[0].evaluate('el => `${el.tagName}, ${el.textContent}`')}"
+                        )
+                        return siblings[0], level, True
 
-            # Try to go up one level
-            try:
-                # Get parent element
-                parent_automation_id = await parent.get_attribute("data-automation-id")
-                current_automation_id = await current.get_attribute(
-                    "data-automation-id"
-                )
+                # Try to go up one level
+                try:
+                    # Get parent element
+                    parent_automation_id = await parent.get_attribute(
+                        "data-automation-id"
+                    )
+                    current_automation_id = await current.get_attribute(
+                        "data-automation-id"
+                    )
 
-                if parent_automation_id == current_automation_id:
-                    print(f"Reached same element at level {level}, stopping")
-                    return None
-            except:
-                print(f"didn't find parent at level: {level} Continue")
+                    if parent_automation_id == current_automation_id:
+                        print(f"Reached same element at level {level}, stopping")
+                        return None, level, False
+                except:
+                    print(f"didn't find parent at level: {level} Continue")
 
-            current = await current.query_selector("xpath=./..")
+                current = await current.query_selector("xpath=./..")
 
         except Exception as e:
             print(f"Error in safe navigation: {e}")
-            return None
-        return None
+            return None, level, False
+        return None, max_levels, False
 
     async def fillform_page_1(self):
         try:
@@ -315,40 +319,42 @@ class Workday:
         return True
 
     async def handle_questions(self, step):
-        required_fields = await self.page.query_selector_all("xpath=//abbr[text()='*']")
+        required_fields = await self.page.query_selector_all(
+            "xpath=//abbr[contains(text(),'*')]"
+        )
         questions = []
         print(f"\nFound {len(required_fields)} required fields")
 
         for field in required_fields[1:]:
             try:
                 # Get the parent span containing the question text
-                question = field.query_selector("xpath=./..")
-                question_text = question.text_content()
+                question = await field.query_selector("xpath=./..")
+                question_text = await question.text_content()
                 if not question_text:
                     continue
                 # Get the parent div that would contain both question and input area
-                parent = question.query_selector(
+                parent = await question.query_selector(
                     "xpath=./ancestor::div[@data-automation-id][position()=1]"
                 )
                 print(
                     f"Parent automation-id: {parent.get_attribute('data-automation-id')}"
                 )
                 # question's input container
-                container, levels_traversed, is_id = self.find_next_sibling_safely(
-                    question, parent
+                container, levels_traversed, is_id = (
+                    await self.find_next_sibling_safely(question, parent)
                 )
-                print("question tag name", question.tag_name, question.text)
-                print(
-                    container.tag_name, container.text, container.get_attribute("type")
-                )
+                # print("question tag name", question.tag_name, question_text)
+                # print(
+                #     container.tag_name, container.text, container.get_attribute("type")
+                # )
                 automation_id = (
-                    container.get_attribute("data-automation-id")
+                    await container.get_attribute("data-automation-id")
                     if not is_id
-                    else container.get_attribute("id")
+                    else await container.get_attribute("id")
                 )
                 print(f"\nQuestion: {question_text}")
                 print(f"Element automation-id: {automation_id}")
-                questions.append((question_text, container, automation_id))
+                questions.append((question_text, container, automation_id, is_id))
             except Exception as e:
                 print(f"Error processing field: {e}")
                 continue
@@ -362,7 +368,7 @@ class Workday:
             keyword_embeddings.append(keyword_embedding)
             embeddingsToActions[keyword_embedding] = (action, value)
 
-        for question_text, input_element, automation_id in questions:
+        for question_text, input_element, automation_id, is_id in questions:
             handled = False
             best_match_score = 0
             best_match_action = None
@@ -396,11 +402,11 @@ class Workday:
                     f"Executing action for question: {question_text} with best match score of: {best_match_score}, {best_match_value}"
                 )
                 action_result = (
-                    best_match_action(
-                        input_element, automation_id, values=best_match_value
+                    await best_match_action(
+                        input_element, automation_id, is_id, values=best_match_value
                     )
                     if best_match_value is not None
-                    else best_match_action(input_element, automation_id)
+                    else await best_match_action(input_element, automation_id, is_id)
                 )
                 await asyncio.sleep(6)
                 if action_result:
@@ -409,8 +415,8 @@ class Workday:
                     print(f"Action failed: {best_match_action}")
                 handled = True
             if not handled and step == 4:
-                action_result = self.answer_dropdown(
-                    input_element, automation_id, values="unknown"
+                action_result = await self.answer_dropdown(
+                    input_element, automation_id, is_id, values="unknown"
                 )
 
             if not handled:
@@ -427,7 +433,7 @@ class Workday:
     async def click_next(self):
         try:
             button = await self.page.query_selector(
-                "xpath=//button[text()='Next' or text()='Continue' or text()='Submit' or text()='Save and Continue' or text()='Review and Submit']",
+                "xpath=//button[contains(text(), 'Next') or contains(text(), 'Continue') or contains(text(), 'Submit') or contains(text(), 'Save and Continue') or contains(text(), 'Review and Submit')]"
             )
             await button.wait_for_element_state("enabled")
             await button.click()
@@ -438,10 +444,11 @@ class Workday:
             error_button = await self.page.query_selector(
                 "button[data-automation-id='errorBanner']"
             )
-            print(
-                "Exception: 'Errors on page. Please resolve and submit manually. You have 60 seconds to do so!'"
-            )
-            await asyncio.sleep(60)
+            if error_button:
+                print(
+                    "Exception: 'Errors on page. Please resolve and submit manually. You have 60 seconds to do so!'"
+                )
+                await asyncio.sleep(60)
         except:
             print("No Errors")
         await asyncio.sleep(10)
@@ -466,14 +473,6 @@ class Workday:
                 await asyncio.sleep(2)
             except Exception as e:
                 print("No Apply button found, continuing...", e)
-            try:
-                print("Try already applied")
-                already_applied = await self.page.query_selector(
-                    "[data-automation-id='alreadyApplied']"
-                )
-                return True
-            except Exception as e:
-                print("No already applied found, continuing...", e)
             # Try autofill with resume
             try:
                 print("Try autofill with resume")
@@ -481,7 +480,7 @@ class Workday:
                     "a[role='button'][data-automation-id='autofillWithResume']",
                 )
                 await button.click()
-                asyncio.sleep(2)
+                await asyncio.sleep(2)
             except Exception as e:
                 print("No autofill resume button found", e)
 
@@ -489,31 +488,45 @@ class Workday:
             try:
                 await asyncio.sleep(2)
                 if existing_company:
-                    self.signin()
+                    await self.signin()
                 else:
-                    self.signup()
+                    await self.signup()
                     self.config.write_company(company)
             except Exception as e:
                 print(f"Error logging in or creating acct: {e}")
                 input("Press Enter when you're ready to continue...")
 
             await asyncio.sleep(6)
-            p_tags = await self.page.query_selectors(
-                "xpath=//p[contains(text(), 'verify')]"
-            )
-            if len(p_tags) > 0:
-                print("Verification needed")
-                input(
-                    "Please verify your account and press Enter when you're ready to continue..."
+            try:
+                print("Try already applied")
+                already_applied = await self.page.query_selector(
+                    "//div[contains(text(), 'already applied')]"
                 )
-            step1 = self.fillform_page_1()
+                print("already_applied:", already_applied)
+                if already_applied:
+                    return True
+            except Exception as e:
+                print("No already applied found, continuing...", e)
+            try:
+                p_tags = await self.page.query_selector_all(
+                    "xpath=//p[contains(text(), 'verify')]"
+                )
+                if p_tags and len(p_tags) > 0:
+                    print("Verification needed")
+                    input(
+                        "Please verify your account and press Enter when you're ready to continue..."
+                    )
+            except Exception as e:
+                print(f"No verification needed: {e}")
+            step1 = await self.fillform_page_1()
             if not step1:
                 input("Press Enter when you're ready to continue with page 1...")
-            self.click_next()
+            await self.click_next()
             try:
+                print("Start form processing")
                 current_page = 2
                 max_pages = 5  # Set this to your maximum number of pages
-
+                print("current_page", current_page)
                 while current_page <= max_pages:
                     await asyncio.sleep(2)  # Brief pause between pages
 
@@ -521,10 +534,11 @@ class Workday:
                         if current_page == 3:
                             success = True  # skip page 3 because it's just reading from the resume
                         else:
-                            success = self.handle_questions(current_page)
+                            asyncio.sleep(2)
+                            success = await self.handle_questions(current_page)
                         if success:
                             print(f"Successfully completed page {current_page}")
-                            self.click_next()
+                            await self.click_next()
                             current_page += 1
                         else:
                             print(
@@ -545,18 +559,18 @@ class Workday:
 
                 # After all pages are done
                 print("Form completion finished")
-                self.page.quit()
+                await self.page.close()
             except Exception as e:
                 print(f"Fatal error in form processing: {e}")
-                self.page.quit()
+                await self.page.close()
                 return False
         except Exception as e:
             print(f"Error in early form processing: {e}")
-            self.page.quit()
+            await self.page.close()
             return False
         return True
 
-    async def handle_multiselect(self, element, _, values):
+    async def handle_multiselect(self, element, _, is_id, values):
         """Handle multi-select dropdowns that require multiple clicks"""
         try:
             await element.click()
@@ -568,14 +582,17 @@ class Workday:
         except Exception as e:
             print(f"Error in handle_multiselect: {e}")
             try:
-                self.answer_dropdown(element, _, values)
+                await self.answer_dropdown(element, _, is_id, values)
             except Exception as e:
                 print(f"Error in using answer_dropdown: {e}")
                 return False
 
-    async def answer_dropdown(self, element, _, values=""):
+    async def answer_dropdown(self, element, data_automation_id, is_id, values=""):
         """Handle single-select dropdowns"""
         try:
+            element = await self.page.query_selector(
+                f"button[data-automation-id={data_automation_id}]"
+            )
             await element.click()
             await asyncio.sleep(0.5)
 
@@ -603,24 +620,27 @@ class Workday:
             # self.select_radio(element, _, values)
             return False
 
-    async def fill_input(self, element, data_automation_id, values=[]):
+    async def fill_input(self, element, data_automation_id, is_id, values=""):
         """Handle text input fields"""
-        current_value = element.get_attribute("value")
+        current_value = await element.get_attribute("value")
         if current_value == str(values):
             print(f"Field already has correct value: {values}")
             return True
         try:
-            print(f"Input value: {values}")
-            # Clear the existing value
-            element.clear()
-            await asyncio.sleep(1)
-            element = None
             try:
                 element = await self.page.query_selector(
                     f"input[data-automation-id='{data_automation_id}']"
                 )
+                await element.wait_for_element_state("enabled")
+                # Send the new value
+                await element.fill(values)
+                await asyncio.sleep(1)
+                return True
             except:
-                element = await self.page.query_selector(f"#{data_automation_id}")
+                print(data_automation_id, "data_automation_id")
+                element = await self.page.wait_for_selector(
+                    f"#{data_automation_id}", timeout=5000
+                )
                 await element.wait_for_element_state("enabled")
                 # Send the new value
                 await element.fill(values)
@@ -630,56 +650,54 @@ class Workday:
             print(f"Error in fill_input: {e}")
             return False
 
-    async def select_radio(self, element, data_automation_id, values=""):
+    async def select_radio(self, element, data_automation_id, is_id, values=""):
         """
         Handle radio button selections with the specific Workday HTML structure
         """
-        has_id = False
-        try:
-            element.get_attribute("id")
-            has_id = True
-        except Exception as e:
-            has_id = False
         try:
             print(
                 f"Selecting radio value: {values} for automation-id: {data_automation_id}"
             )
 
             # Find the container with the radio group
-            radio_group = self.wait.until(
-                EC.presence_of_element_located(
-                    (f'div[data-automation-id="{data_automation_id}"]')
-                )
-                if not has_id
-                else EC.presence_of_element_located((By.ID, f"{data_automation_id}"))
+            radio_group = await self.page.wait_for_selector(
+                f'div[data-automation-id="{data_automation_id}"]'
+                if not is_id
+                else f"#{data_automation_id}"
             )
             # Find all radio options within the group
-            radio_options = radio_group.query_selectors('div[class*="css-1utp272"]')
+            radio_options = await radio_group.query_selector_all(
+                'div[class*="css-1utp272"]'
+            )
             for option in radio_options:
                 try:
-                    print("option.text", option.text)
                     # Get the label text to match against our value
-                    label = option.query_selector("label").text.strip()
-                    label = " ".join(
-                        [
-                            word
-                            for word in re.split("\W+", label)
-                            if word.lower() not in stopwords.stopwords
-                        ]
-                    )
+                    label = await option.query_selector("label")
+                    if label:
+                        label = await label.text_content()
+                        if label.startswith(" "):
+                            label = label.strip()
+                    print("label", label)
+                    # label = " ".join(
+                    #     [
+                    #         word
+                    #         for word in re.split("\W+", label)
+                    #         if word.lower() not in stopwords.stopwords
+                    #     ]
+                    # )
                     if any(
                         value in l for value in values.lower() for l in label.lower()
                     ):
                         # Find the actual radio input within this option
-                        radio_input = option.query_selector('input[type="radio"]')
+                        radio_input = await option.query_selector('input[type="radio"]')
 
                         # Try to click the label first (often more reliable than clicking the input directly)
                         try:
-                            await option.query_selector("label").click()
+                            await label.click()
                         except:
                             # If label click fails, try JavaScript click on the input
-                            self.page.execute_script(
-                                "arguments[0].click();", radio_input
+                            await self.page.evaluate(
+                                "(radio) => radio.click()", radio_input
                             )
 
                         await asyncio.sleep(1)
@@ -691,7 +709,10 @@ class Workday:
             print(f"No matching radio option found for value: {values}")
             print(
                 "Available options:",
-                [opt.query_selector("label").text for opt in radio_options],
+                [
+                    await opt.query_selector("label").text_content()
+                    for opt in radio_options
+                ],
             )
             return False
 
