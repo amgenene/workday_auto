@@ -1,0 +1,61 @@
+2025-01-22 13:20:54,425 - workday_app - ERROR - No job URLs found
+2025-01-22 13:31:03,808 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 13:31:03,808 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 13:31:30,634 - workday_app - ERROR - Failed to process https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 13:31:30,723 - workday_app - INFO - All jobs processed
+2025-01-22 13:32:48,119 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 13:32:48,120 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 13:33:13,118 - workday_app - ERROR - Failed to process https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 13:33:13,407 - workday_app - INFO - All jobs processed
+2025-01-22 13:35:56,378 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 13:35:56,378 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 13:36:22,251 - workday_app - ERROR - Failed to process https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 13:36:23,001 - workday_app - INFO - All jobs processed
+2025-01-22 13:44:58,277 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 13:44:58,277 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 13:45:23,404 - workday_app - ERROR - Failed to process https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 13:45:24,061 - workday_app - INFO - All jobs processed
+2025-01-22 14:36:21,894 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 14:36:21,895 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 14:36:25,433 - workday_app - ERROR - Error processing https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+Traceback (most recent call last):
+  File "/Users/alazargenene/code/old/workday_auto/workday_app/main.py", line 50, in _process_job
+    element_handler = ElementHandler(driver, wait)
+  File "/Users/alazargenene/code/old/workday_auto/workday_app/browser/elements.py", line 12, in __init__
+    (self.is_date_input, self.handle_date),
+AttributeError: 'ElementHandler' object has no attribute 'handle_date'
+2025-01-22 14:36:25,617 - workday_app - INFO - All jobs processed
+2025-01-22 14:37:36,010 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 14:37:36,010 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 14:37:38,420 - workday_app - ERROR - Error processing https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+Traceback (most recent call last):
+  File "/Users/alazargenene/code/old/workday_auto/workday_app/main.py", line 50, in _process_job
+    element_handler = ElementHandler(driver, wait)
+  File "/Users/alazargenene/code/old/workday_auto/workday_app/browser/elements.py", line 13, in __init__
+    (self.is_multiselect, self.handle_multiselect),
+AttributeError: 'ElementHandler' object has no attribute 'handle_multiselect'
+2025-01-22 14:37:38,567 - workday_app - INFO - All jobs processed
+2025-01-22 14:48:56,687 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 14:48:56,688 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 14:49:22,867 - workday_app - ERROR - Failed to process https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 14:49:23,378 - workday_app - INFO - All jobs processed
+2025-01-22 14:50:37,011 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 14:50:37,011 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 14:51:02,613 - workday_app - ERROR - Failed to process https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 14:51:03,016 - workday_app - INFO - All jobs processed
+2025-01-22 14:58:49,245 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 14:58:49,245 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 14:59:15,833 - workday_app - ERROR - Failed to process https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 14:59:16,297 - workday_app - INFO - All jobs processed
+2025-01-22 15:00:36,537 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 15:00:36,537 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 15:01:01,718 - workday_app - ERROR - Failed to process https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 15:01:02,150 - workday_app - INFO - All jobs processed
+2025-01-22 15:04:44,528 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 15:04:44,529 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 15:05:26,255 - workday_app - ERROR - Failed to process https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 15:05:27,067 - workday_app - INFO - All jobs processed
+2025-01-22 15:14:28,865 - workday_app - INFO - Found 1 jobs to process
+2025-01-22 15:14:28,866 - workday_app - INFO - Processing job 1/1: https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 15:15:10,520 - workday_app - ERROR - Failed to process https://cadence.wd1.myworkdayjobs.com/external_careers/job/SAN-JOSE/Software-Engineer-II_R48800-1
+2025-01-22 15:15:11,018 - workday_app - INFO - All jobs processed
