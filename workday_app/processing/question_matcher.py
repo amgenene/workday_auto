@@ -39,7 +39,7 @@ class QuestionMatcher:
             for q_embedding, value in self.embedding_to_values
         ]
 
-        max_score, value = max(similarity_scores, key=lambda x: x[0])
+        (max_score,) = max(similarity_scores, key=lambda x: x[0])
         if max_score > threshold:
             return value, max_score
 
