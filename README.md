@@ -9,9 +9,10 @@ Automate your job application process on Workday with this script! This tool str
 1. [Prerequisites](#prerequisites)
 2. [How to Run](#how-to-run)
 3. [System Architecture](#system-architecture)
-4. [Contributing](#contributing)
-5. [Future Improvements](#future-improvements)
-6. [Support the project](#support-the-project)
+4. [Recent Improvements](#recent-improvements)
+5. [Contributing](#contributing)
+6. [Future Improvements](#future-improvements)
+7. [Support the project](#support-the-project)
 ---
 
 ## **Prerequisites**
@@ -37,8 +38,47 @@ python workday.py
 ```
 
 inspired by https://github.com/raghuboosetty/workday
+
 ## **System Architecture**
-Please be cognizant if user verification is required for the job you are applying to you have to do it manually and hit enter once you are done. Now as for the way it works: I'm using selenium to open the job url, then for each stage I get all of the required field questions, and their answer boxes. I'm using fuzzy search to try my best to match questions to a specific workflow be it select radio, handle multiselect, ect. If you come across an error, it's most likely that the question being asked is too different from any of ones present, and you will need to update the self.questionsToActions dictionary in workday.py to handle the new question. If you find any bugs, or have any suggestions, please feel free to fork the repo and make a pull request. I will happyly take a look into it and merge it in. Again this is a WIP and I have alot of ideas to make the User experience better, but I hope it saves you time applying to jobs!
+This tool uses Selenium to automate job applications on Workday sites. The application workflow:
+
+1. Opens the job URL and clicks the Apply button
+2. Handles signup/signin based on whether you've applied to the company before
+3. Uploads your resume
+4. For each form page:
+   - Identifies required fields and their associated input elements
+   - Uses sentence embedding matching to determine the appropriate response for each question
+   - Automatically fills in form fields with your predefined answers
+   - Handles different input types (text, dropdown, radio buttons, checkboxes, etc.)
+   - Moves to the next page until complete
+
+If user verification is required, the program will pause and prompt you to complete verification manually.
+
+## **Recent Improvements**
+
+1. **Interactive Learning System**: Added an intelligent learning system that observes manual interactions when automation fails, records them, and applies the learned patterns to future questions.
+
+2. **Smart Element Type Detection**: Automatically identifies form element types to better understand how to interact with them (text input, dropdown, radio button, etc.)
+
+3. **Reduced StopWords**: Optimized the stopwords list to prevent removing important context from questions, improving matching accuracy.
+
+4. **Improved Sentence Matching**: Switched from fuzzy string matching to sentence embedding comparison using the all-MiniLM-L6-v2 model, enabling more accurate mapping of questions to predefined answers.
+
+5. **Enhanced Account Detection**: The tool now automatically detects when an email is already registered and switches to sign-in flow.
+
+6. **More Robust DOM Traversal**: Improved the algorithm for finding related form elements by traversing the DOM structure more intelligently.
+
+7. **Better Error Handling**: Added more robust error handling and interactive prompts for manual intervention when needed.
+
+### **How the Learning System Works**
+
+When the automation encounters a form field it can't automatically fill:
+
+1. It asks you to fill the field manually
+2. You enter what you filled in the field when prompted
+3. The system records this interaction in `config/learned_interactions.json`
+4. In future applications, the system will attempt to apply this learned mapping
+5. After completing all applications, the tool suggests improvements based on what it learned
 
 ## **Contributing**
 Contributions are welcome! If you encounter any bugs or have suggestions for improvement:
@@ -58,13 +98,13 @@ Contributions are welcome! If you encounter any bugs or have suggestions for imp
    ```
    5. Submit a pull request.
 
-## *Future Improvements**
-   Refactor Code: Clean up and optimize the code for better maintainability.
-   Use sentiment analysis instead of fuzzy search: Utilize natural language processing to match questions to workflows.
-   Enhanced User Experience: Improve the script's ability to adapt to new workflows dynamically possibly utilizing agents.
-   CAPTCHA Automation: Research and implement solutions for automating CAPTCHA challenges.
-   Detailed Logs: Add logging to provide more visibility into the process.
-   Interactive UI: Create a graphical interface for easier configuration and execution.
+## **Future Improvements**
+   - **Complete Code Refactoring**: Finish implementing the modular architecture in the processing/ and browser/ directories
+   - **Smart Question Classification**: Use machine learning to automatically categorize form fields without predefined mappings
+   - **Resume Parsing**: Extract information from your resume to auto-populate more fields
+   - **Browser Choice**: Add support for Firefox and other browsers
+   - **Interactive UI**: Create a graphical interface for easier configuration and execution
+   - **Local Data Storage**: Save application history and progress
 
 ## **Support the project**
 If you find this script useful and want to support its development, consider donating using buy me a coffee  (https://buymeacoffee.com/healthIsWealth809 )
