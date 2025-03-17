@@ -6,13 +6,22 @@ from selenium.webdriver.support import expected_conditions as EC
 from urllib.parse import urlparse
 from config import Config
 from datetime import datetime
-from fuzzywuzzy import fuzz
 import os
 import re
 from StopWords import StopWords
 from sentence_transformers import SentenceTransformer, util
 from operator import itemgetter
 import sys
+
+# Add to imports at top
+import nltk
+from nltk.tokenize import word_tokenize
+
+try:
+    nltk.data.find("tokenizers/punkt")
+except LookupError:
+    nltk.download("punkt")
+
 
 # Add the project root to the Python path to import from processing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -44,6 +53,60 @@ stopwords = StopWords()
 
 
 class Workday:
+    def detect_negation(self, text):
+        """Check if text has negative meaning"""
+        negative_words = {
+            "no",
+            "not",
+            "none",
+            "never",
+            "neither",
+            "nowhere",
+            "nothing",
+            "cannot",
+            "can't",
+            "deny",
+            "refuse",
+            "decline",
+            "reject",
+            "disagree",
+            "don't",
+            "doesn't",
+            "didn't",
+            "won't",
+            "wouldn't",
+            "haven't",
+            "hasn't",
+            "hadn't",
+            "without",
+        }
+
+        # Convert to lowercase and tokenize
+        tokens = word_tokenize(text.lower())
+
+        # Check for negative words
+        has_negative = any(word in negative_words for word in tokens)
+
+        # Check for specific phrases that indicate negation
+        negative_phrases = [
+            "do not",
+            "does not",
+            "did not",
+            "will not",
+            "would not",
+            "have not",
+            "has not",
+            "had not",
+            "prefer not",
+            "rather not",
+            "n/a",
+            "not applicable",
+        ]
+
+        has_negative_phrase = any(phrase in text.lower() for phrase in negative_phrases)
+
+        return has_negative or has_negative_phrase
+
     def __init__(self, url):
         self.url = url
         self.config = Config("./config/profile.yaml")
@@ -893,7 +956,9 @@ class Workday:
                                     question_text, action_name, str(e)
                                 )
 
+                print("handled?", handled, question_text)
                 if not handled:
+
                     print(
                         f"No matching action found for question: {question_text}. Please fill manually"
                     )
@@ -1531,16 +1596,37 @@ class Workday:
 
             if values == "unknown":
                 # Just pick the first or last option as a fallback
+                negative_options = []
+                for option in options:
+                    option_text = option.text.strip()
+                    if self.detect_negation(option_text):
+                        negative_options.append(option)
+                        if len(negative_options):
+                            # Pick the first negative option
+                            selected_option = negative_options[0]
+                            try:
+                                self.driver.execute_script(
+                                    "arguments[0].click();", selected_option
+                                )
+                                time.sleep(1)
+                                print(
+                                    f"Selected negative option: '{selected_option.text}'"
+                                )
+                                return True
+                            except Exception as click_error:
+                                print(f"Error clicking negative option: {click_error}")
+                    # If no negative options found, fallback to original behavior
+                    # print("No negative options found, using last option as fallback")
+
+                # For known values, try to find the best match
                 try:
                     self.driver.execute_script("arguments[0].click();", options[-1])
                     time.sleep(1)
-                    print(f"Selected the last option as fallback")
                     return True
                 except Exception as click_error:
                     print(f"Error clicking last option: {click_error}")
                     return False
 
-            # For known values, try to find the best match
             best_match = None
             best_score = 0
 
