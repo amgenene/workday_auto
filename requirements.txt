@@ -1,3 +1,5 @@
 fuzzywuzzy==0.18.0
 PyYAML==6.0.2
 selenium==4.27.1
+sentence-transformers==2.5.1
+torch>=2.0.0
