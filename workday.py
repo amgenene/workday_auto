@@ -16,6 +16,7 @@ import sys
 # Add to imports at top
 import nltk
 from nltk.tokenize import word_tokenize
+from selenium.webdriver.common.keys import Keys
 
 try:
     nltk.data.find("tokenizers/punkt")
@@ -115,6 +116,19 @@ class Workday:
         self.wait = WebDriverWait(self.driver, 10)
         self.driver.maximize_window()
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
+        
+        # Create a mapping from element types to handler functions
+        self.element_type_handlers = {
+            "text_input": self.fill_input,  # For text fields
+            "text": self.fill_input,        # For backward compatibility
+            "dropdown": self.answer_dropdown,
+            "radio": self.select_radio,
+            "checkbox": self.select_checkbox,
+            "multiselect": self.handle_multiselect,
+            "date": self.handle_date,
+            # Default handler for unknown types
+            "unknown": self.answer_dropdown
+        }
 
         # Initialize the advanced learning system
         try:
@@ -144,83 +158,77 @@ class Workday:
 
             self.learner = DummyLearner()
 
-        # Modified data structure: list of tuples (keywords, action)
+        # Modified data structure: list of tuples (keywords, value)
+        # The action will be determined at runtime based on the element type
         self.questionsToActions = [
             (
                 ["how did you hear about us"],
-                self.handle_multiselect,
                 "LinkedIn",
             ),
             (
                 ["Country Phone Code"],
-                self.handle_multiselect,
                 "United States of America",
             ),
             (
                 ["Country"],
-                self.handle_multiselect,
                 "United States of America",
             ),
-            (["Are you legally eligible to work"], self.answer_dropdown, "Yes"),
+            (["Are you legally eligible to work"], "Yes"),
             (
                 [
                     "Do you now or will you in the future require sponsorship for a work visa"
                 ],
-                self.answer_dropdown,
                 "No",
             ),
             (
                 ["have you previously been employed", "have you ever worked for"],
-                self.select_radio,
                 "No",
             ),
             (
                 ["first name"],
-                self.fill_input,
                 self.profile["first_name"],
             ),
-            (["last name"], self.fill_input, self.profile["family_name"]),
-            (["email"], self.fill_input, self.profile["email"]),
-            (["address line 1"], self.fill_input, self.profile["address_line_1"]),
-            (["city"], self.fill_input, self.profile["address_city"]),
-            (["state"], self.answer_dropdown, ["NY", "New York"]),
-            (["postal Code"], self.fill_input, self.profile["address_postal_code"]),
-            (["phone device type"], self.answer_dropdown, "Mobile"),
-            (["phone number"], self.fill_input, self.profile["phone_number"]),
-            (["are you legally authorized"], self.select_radio, "Yes"),
-            (["will you now or in the future"], self.answer_dropdown, "No"),
-            (["Are you at least 18 years of age?"], self.answer_dropdown, "Yes"),
+            (["last name"], self.profile["family_name"]),
+            (["email"], self.profile["email"]),
+            (["address line 1"], self.profile["address_line_1"]),
+            (["city"], self.profile["address_city"]),
+            (["state"], ["NY", "New York"]),
+            (["postal Code"], self.profile["address_postal_code"]),
+            (["phone device type"], "Mobile"),
+            (["phone number"], self.profile["phone_number"]),
+            (["are you legally authorized"], "Yes"),
+            (["will you now or in the future"], "No"),
+            (["Are you at least 18 years of age?"], "Yes"),
             (
                 [
                     "Do you have an agreement or contract such as a non-disclosure or non-competitive agreement with another employer that might restrict your employment at"
                 ],
-                self.answer_dropdown,
                 "No",
             ),
-            (["do you require sponsorship"], self.answer_dropdown, "No"),
-            (["disability status"], self.select_radio, "I don't wish to answer"),
-            (["veteran status"], self.answer_dropdown, "I am not"),
-            (["gender"], self.answer_dropdown, "Male"),
+            (["do you require sponsorship"], "No"),
+            (["disability status"], "I don't wish to answer"),
+            (["veteran status"], "I am not"),
+            (["gender"], "Male"),
             (
                 ["ethnicity"],
-                self.answer_dropdown,
                 "Black or African American (United States of America)",
             ),
             (
                 ["What is your race"],
-                self.answer_dropdown,
                 "Black or African American (United States of America)",
             ),
-            (["hispanic or latino"], self.select_radio, "No"),
-            (["date"], self.handle_date, None),
+            (["hispanic or latino"], "No"),
+            (["date"], None),
             (
                 ["Please check one of the boxes below: "],
-                self.select_radio,
                 "No, I do not have a disability",
             ),
             (
                 ["I understand and acknowledge the terms of use"],
-                self.select_checkbox,
+                None,
+            ),
+            (
+                ["Yes, I have read and consent to the terms and conditions"],
                 None,
             ),
         ]
@@ -249,30 +257,11 @@ class Workday:
 
     def handle_date(self, element, _):
         try:
-            month_input = self.wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.CSS_SELECTOR,
-                        "div[data-automation-id='dateSectionMonth-display']",
-                    )
-                )
+
+            month_input, day_input, year_input = element.find_elements(
+                By.CSS_SELECTOR, "input"
             )
-            day_input = self.wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.CSS_SELECTOR,
-                        "div[data-automation-id='dateSectionDay-display']",
-                    )
-                )
-            )
-            year_input = self.wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.CSS_SELECTOR,
-                        "div[data-automation-id='dateSectionYear-display']",
-                    )
-                )
-            )
+            print("here date", month_input.text, day_input)
             month_input.send_keys(datetime.now().strftime("%m"))
             day_input.send_keys(datetime.now().strftime("%d"))
             year_input.send_keys(datetime.now().strftime("%Y"))
@@ -510,7 +499,7 @@ class Workday:
             element: WebElement - The element to classify
 
         Returns:
-            str: The element type (text, dropdown, radio, checkbox, multiselect, date, unknown)
+            str: The element type (text_input, dropdown, radio, checkbox, multiselect, date, unknown)
         """
         try:
             tag_name = element.tag_name.lower()
@@ -520,7 +509,7 @@ class Workday:
             if tag_name == "input":
                 input_type = element.get_attribute("type")
                 if input_type in ["text", "email", "tel", "number", "password"]:
-                    element_type = "text"
+                    element_type = "text_input"
                 elif input_type == "radio":
                     element_type = "radio"
                 elif input_type == "checkbox":
@@ -546,6 +535,14 @@ class Workday:
                 # For Workday's custom dropdown/select elements
                 elif role == "button" and "listbox" in aria_controls:
                     element_type = "dropdown"
+                
+                # Check for text input elements that might be inside the div
+                try:
+                    text_inputs = element.find_elements(By.XPATH, ".//input[@type='text' or @type='email' or @type='tel' or @type='number']")
+                    if text_inputs:
+                        element_type = "text_input"
+                except:
+                    pass
 
             # Check for nearby elements that might indicate type
             try:
@@ -562,6 +559,36 @@ class Workday:
                 )
                 if checkbox_inputs:
                     element_type = "checkbox"
+                    
+                # Check for dropdown indicators
+                dropdown_markers = element.find_elements(
+                    By.XPATH, ".//div[contains(@class, 'dropdown') or contains(@class, 'select')]"
+                )
+                if dropdown_markers and element_type == "unknown":
+                    element_type = "dropdown"
+                    
+                # Look for input fields that might indicate multiselect
+                multiselect_markers = element.find_elements(
+                    By.XPATH, ".//div[contains(@class, 'pill') or contains(@class, 'token') or contains(@class, 'chip')]"
+                )
+                if multiselect_markers:
+                    element_type = "multiselect"
+                    
+                # Check for date input fields
+                date_inputs = element.find_elements(
+                    By.XPATH, 
+                    ".//input[@type='date'] | .//input[contains(@placeholder, 'MM')] | .//input[contains(@placeholder, 'DD')] | .//input[contains(@placeholder, 'YYYY')]"
+                )
+                if date_inputs and len(date_inputs) >= 2:  # Date fields usually come in groups of 2-3 inputs
+                    element_type = "date"
+                
+                # Also check for date in question text or labels
+                try:
+                    question_text = element.text.lower()
+                    if ("date" in question_text or "birthday" in question_text or "dob" in question_text) and element_type == "unknown":
+                        element_type = "date"
+                except:
+                    pass
             except:
                 pass
 
@@ -718,12 +745,13 @@ class Workday:
 
         keyword_embeddings = []
         similarity_scores = []
-        embeddingsToActions = {}
-        # Initialize embeddingsToActions, and get keyword embeddings
-        for keywords, action, value in self.questionsToActions:
+        embeddingsToValues = {}
+        # Initialize embeddingsToValues, and get keyword embeddings
+        for keywords, value in self.questionsToActions:
             keyword_embedding = self.model.encode(keywords, convert_to_tensor=True)
             keyword_embeddings.append(keyword_embedding)
-            embeddingsToActions[keyword_embedding] = (action, value)
+            # Store the value to be used with the dynamically determined action
+            embeddingsToValues[keyword_embedding] = value
 
         for question_text, input_element, automation_id in questions:
             try:
@@ -737,12 +765,16 @@ class Workday:
                 exact_match_found = False
 
                 # Try to find exact matches first
-                for keywords, action, value in self.questionsToActions:
+                for keywords, value in self.questionsToActions:
                     for keyword in keywords:
                         if keyword.lower().strip() == question_lower:
                             print(f"EXACT MATCH found for question: '{question_text}'")
-                            best_match_action = action
+                            # Determine the action based on element type
+                            element_type = self._detect_element_type(input_element)
+                            print(f"Detected element type: {element_type}")
+                            best_match_action = self.element_type_handlers.get(element_type, self.element_type_handlers["unknown"])
                             best_match_value = value
+                            print(f"Matched to element type: {element_type}, action: {best_match_action.__name__}, value: {value}")
                             best_match_score = 1.0
                             exact_match_found = True
                             break
@@ -780,18 +812,24 @@ class Workday:
                     print(
                         f"Best semantic match score: {max_score:.4f} for '{question_text}'"
                     )
-                    print(f"Matched to: {embeddingsToActions[keyword_embedding]}")
-
+                    
+                    # Determine the action based on element type
+                    element_type = self._detect_element_type(input_element)
+                    print(f"Detected element type: {element_type}")
+                    
+                    best_match_action = self.element_type_handlers.get(element_type, self.element_type_handlers["unknown"])
+                    best_match_value = embeddingsToValues[keyword_embedding]
+                    
+                    print(f"Matched to element type: {element_type}, action: {best_match_action.__name__}, value: {best_match_value}")
+                    
                     best_match_score = max_score
-                    best_match_action = embeddingsToActions[keyword_embedding][0]
-                    best_match_value = embeddingsToActions[keyword_embedding][1]
 
                 # Lower the threshold slightly to handle more questions
                 if (
                     best_match_score > 0.55
                 ):  # Adjusted threshold for what counts as a "match"
                     print(
-                        f"Executing action for question: {question_text} with best match score of: {best_match_score}, {best_match_value}"
+                        f"Executing action for question: {question_text} with best match score of: {best_match_score}, value: {best_match_value}"
                     )
                     action_result = (
                         best_match_action(
@@ -802,7 +840,7 @@ class Workday:
                     )
                     time.sleep(3)  # Reduced wait time for better performance
                     if action_result:
-                        print(f"Action successful: {best_match_action}")
+                        print(f"Action successful: {best_match_action.__name__}")
                         # Track this question as handled
                         handled_questions.append(
                             (
@@ -812,12 +850,12 @@ class Workday:
                             )
                         )
                     else:
-                        print(f"Action failed: {best_match_action}")
+                        print(f"Action failed: {best_match_action.__name__}")
                     handled = True
                 # Secondary threshold for "likely" matches
                 elif best_match_score > 0.4 and step != 4:
                     print(
-                        f"Possible match for question: {question_text} with score: {best_match_score}, {best_match_value}"
+                        f"Possible match for question: {question_text} with score: {best_match_score}, value: {best_match_value}"
                     )
                     print("Trying best guess match...")
                     action_result = (
@@ -828,7 +866,7 @@ class Workday:
                         else best_match_action(input_element, automation_id)
                     )
                     if action_result:
-                        print(f"Action successful: {best_match_action}")
+                        print(f"Action successful: {best_match_action.__name__}")
                         # Track this question as handled
                         handled_questions.append(
                             (
@@ -839,7 +877,7 @@ class Workday:
                         )
                         handled = True
                     else:
-                        print(f"Action failed: {best_match_action}")
+                        print(f"Action failed: {best_match_action.__name__}")
 
                 # Fallback for common Yes/No questions on the later pages
                 if not handled and step == 4:
@@ -868,29 +906,38 @@ class Workday:
                         print(
                             f"  • Action type: {learned_mapping.get('action_type', 'unknown')}"
                         )
-
-                        # Determine the action based on the action type recorded
-                        action_name = learned_mapping.get(
-                            "action_type", "unknown_action"
-                        )
+                        
                         value = learned_mapping.get("value", "")
-
-                        # Map the action name to the actual method
-                        action_method = None
-                        if action_name == "fill_input":
-                            action_method = self.fill_input
-                        elif action_name in ["select_radio", "radio"]:
-                            action_method = self.select_radio
-                        elif action_name in ["answer_dropdown", "dropdown"]:
-                            action_method = self.answer_dropdown
-                        elif action_name in ["handle_multiselect", "multiselect"]:
-                            action_method = self.handle_multiselect
-                        elif action_name in ["select_checkbox", "checkbox"]:
-                            action_method = self.select_checkbox
+                        
+                        # Try to use the detected element type first
+                        element_type = self._detect_element_type(input_element)
+                        print(f"Current detected element type: {element_type}")
+                        
+                        # Use the element type handler if it's a known type
+                        action_method = self.element_type_handlers.get(element_type)
+                        
+                        # If element type is unknown or not mapped, fall back to the recorded action type
+                        if not action_method or element_type == "unknown":
+                            action_name = learned_mapping.get("action_type", "unknown_action")
+                            print(f"Falling back to recorded action type: {action_name}")
+                            
+                            # Map the action name to the actual method
+                            if action_name == "fill_input":
+                                action_method = self.fill_input
+                            elif action_name in ["select_radio", "radio"]:
+                                action_method = self.select_radio
+                            elif action_name in ["answer_dropdown", "dropdown"]:
+                                action_method = self.answer_dropdown
+                            elif action_name in ["handle_multiselect", "multiselect"]:
+                                action_method = self.handle_multiselect
+                            elif action_name in ["select_checkbox", "checkbox"]:
+                                action_method = self.select_checkbox
 
                         if action_method:
+                            # For logging purposes
+                            method_name = action_method.__name__
                             print(
-                                f"Applying learned action: {action_name} with value: '{value}'"
+                                f"Applying action: {method_name} with value: '{value}'"
                             )
 
                             # Scroll element into view
@@ -930,15 +977,17 @@ class Workday:
                                 )
 
                                 if result:
+                                    method_name = action_method.__name__
                                     print(f"✅ Successfully applied learned action")
                                     handled_questions.append(
-                                        (question_text, action_name, value)
+                                        (question_text, method_name, value)
                                     )
                                     handled = True
                                 else:
+                                    method_name = action_method.__name__
                                     print(f"❌ Failed to apply learned action")
                                     self.learner.record_failed_attempt(
-                                        question_text, action_name, "Execution failed"
+                                        question_text, method_name, "Execution failed"
                                     )
                             except Exception as e:
                                 print(f"Error applying learned action: {e}")
@@ -952,8 +1001,9 @@ class Workday:
                                 except:
                                     pass
 
+                                method_name = action_method.__name__
                                 self.learner.record_failed_attempt(
-                                    question_text, action_name, str(e)
+                                    question_text, method_name, str(e)
                                 )
 
                 print("handled?", handled, question_text)
@@ -1087,7 +1137,7 @@ class Workday:
                 f"Found {len(questions)} questions, processed all of them with some possible errors."
             )
 
-        input("\nPress Enter to continue after reviewing the questions...")
+        # input("\nPress Enter to continue after reviewing the questions...")
         return True
 
     def _check_if_job_closed_or_error(self):
@@ -1503,38 +1553,120 @@ class Workday:
     def handle_multiselect(self, element, _, values):
         """Handle multi-select dropdowns that require multiple clicks"""
         try:
-            # Find the input element
-            input_element = element.find_element(By.XPATH, "//div//input")
+            # Find the input element within THIS specific element (not globally)
+            try:
+                # Try to find input directly inside this element first
+                input_element = element.find_element(By.XPATH, ".//input")
+            except:
+                try:
+                    # Try to find input in child divs
+                    input_element = element.find_element(By.XPATH, ".//div//input")
+                except:
+                    # Last resort, try various selector patterns common in Workday
+                    selectors = [
+                        ".//div[contains(@class, 'input')]//input", 
+                        ".//div[contains(@data-automation-id, 'input')]//input",
+                        ".//div[contains(@class, 'search')]//input",
+                        ".//div[contains(@class, 'typeahead')]//input",
+                        ".//div//input[@type='text']"
+                    ]
+                    
+                    found = False
+                    for selector in selectors:
+                        try:
+                            input_element = element.find_element(By.XPATH, selector)
+                            found = True
+                            print(f"Found input using selector: {selector}")
+                            break
+                        except:
+                            continue
+                    
+                    if not found:
+                        print("Could not find input element within multiselect container, using direct click")
+                        # Fall back to clicking the element directly
+                        element.click()
+                        time.sleep(1)
+                        # Try to find the input element that appeared after clicking
+                        input_element = self.driver.find_element(By.XPATH, "//div[contains(@class, 'dropdown') or contains(@class, 'select')]//input[not(ancestor::div[contains(@style, 'display: none')])]")
 
+            # Clear any existing value first
+            try:
+                input_element.clear()
+            except:
+                pass
+            
+            print(f"Entering text '{values}' into multiselect")
+            
+            # Convert values to string if it's a list
+            if isinstance(values, list):
+                value_to_use = values[0]  # Use first value if it's a list
+            else:
+                value_to_use = values
+            
             # Send the text value
-            input_element.send_keys(values)
-
+            input_element.send_keys(value_to_use)
+            
             # Short pause to let the dropdown options populate
-            time.sleep(0.5)
-
-            # Press Enter to confirm selection
-            from selenium.webdriver.common.keys import Keys
-
-            input_element.send_keys(Keys.ENTER)
-
+            time.sleep(1)
+            
+            # Try to find and click matching option
+            try:
+                # Look for option elements that match our text
+                option_xpath = f"//div[contains(@class, 'dropdown') or contains(@class, 'select')]//div[contains(text(), '{value_to_use}') or text()='{value_to_use}']"
+                options = self.driver.find_elements(By.XPATH, option_xpath)
+                
+                if options:
+                    # Click the first matching option
+                    print(f"Found matching option: '{options[0].text}'")
+                    self.driver.execute_script("arguments[0].click();", options[0])
+                    time.sleep(0.5)
+                else:
+                    # If no options found, try pressing Enter twice
+                    input_element.send_keys(Keys.ENTER)
+                    time.sleep(0.5)
+                    try:
+                        input_element.send_keys(Keys.ENTER)
+                    except:
+                        # Element might have changed after first Enter
+                        pass
+            except:
+                # Fallback to Enter key if finding options fails
+                input_element.send_keys(Keys.ENTER)
+                time.sleep(0.5)
+                try:
+                    input_element.send_keys(Keys.ENTER)
+                except:
+                    pass
+            
             # Wait for the selection to be confirmed
             self._wait_for_element_stability(element)
-
+            
             # Verify the selection was successful (if possible)
             try:
                 # Look for selected items or pills that indicate a successful selection
-                selected_items = self.driver.find_elements(
-                    By.XPATH,
-                    "//div[contains(@class, 'pill') or contains(@class, 'selected') or contains(@class, 'option')]",
-                )
-                if selected_items:
-                    print(
-                        f"Selection confirmed: Found {len(selected_items)} selected items"
+                # Use relative XPath first to find items within this element's context
+                try:
+                    selected_items = element.find_elements(
+                        By.XPATH,
+                        ".//div[contains(@class, 'pill') or contains(@class, 'selected') or contains(@class, 'option')]"
                     )
-            except:
+                except:
+                    # Fallback to global search if local search fails
+                    selected_items = self.driver.find_elements(
+                        By.XPATH,
+                        "//div[contains(@class, 'pill') or contains(@class, 'selected') or contains(@class, 'option')]"
+                    )
+                    
+                if selected_items:
+                    print(f"Selection confirmed: Found {len(selected_items)} selected items")
+                    for item in selected_items[:3]:  # Show first 3 items
+                        print(f"  - Selected: '{item.text}'")
+            except Exception as verify_error:
+                print(f"Could not verify selection: {verify_error}")
                 # If we can't verify, continue anyway
                 pass
-
+                
+            print("Multiselect operation completed")
             return True
         except Exception as e:
             print(f"Error in handle_multiselect: {e}")
@@ -1757,20 +1889,8 @@ class Workday:
         except Exception as e:
             has_id = False
         try:
-            print(
-                f"Selecting radio value: {values} for automation-id: {data_automation_id}"
-            )
-
-            # Find the container with the radio group
-            radio_group = self.wait.until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, f'div[data-automation-id="{data_automation_id}"]')
-                )
-                if not has_id
-                else EC.presence_of_element_located((By.ID, f"{data_automation_id}"))
-            )
             # Find all radio options within the group
-            radio_options = radio_group.find_elements(
+            radio_options = self.driver.find_elements(
                 By.CSS_SELECTOR, 'div[class*="css-1utp272"]'
             )
 
@@ -1785,7 +1905,6 @@ class Workday:
             # Track best match
             best_match_score = 0
             best_match_option = None
-
             for option in radio_options:
                 try:
                     # Get the label text and process it
@@ -1803,7 +1922,7 @@ class Workday:
                             if word.lower() not in stopwords.stopwords
                         ]
                     )
-
+                    print(f"Filtered label: {filtered_label}")
                     # Calculate match score based on token overlap
                     matching_tokens = 0
                     for token in all_value_tokens:
@@ -1813,12 +1932,12 @@ class Workday:
                     # Calculate score as percentage of matching tokens
                     if all_value_tokens:
                         score = matching_tokens / len(all_value_tokens)
-
                         # Check for exact match against any of the provided values
                         for value in value_list:
                             if str(value).lower() == label.lower():
                                 score = 1.0
                                 break
+                        print("Score:", score)
 
                         # Keep track of best match
                         if score > best_match_score:
