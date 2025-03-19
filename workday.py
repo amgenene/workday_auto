@@ -102,6 +102,7 @@ class Workday:
             "rather not",
             "n/a",
             "not applicable",
+            "none of the above",
         ]
 
         has_negative_phrase = any(phrase in text.lower() for phrase in negative_phrases)
@@ -116,18 +117,18 @@ class Workday:
         self.wait = WebDriverWait(self.driver, 10)
         self.driver.maximize_window()
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
-        
+
         # Create a mapping from element types to handler functions
         self.element_type_handlers = {
             "text_input": self.fill_input,  # For text fields
-            "text": self.fill_input,        # For backward compatibility
+            "text": self.fill_input,  # For backward compatibility
             "dropdown": self.answer_dropdown,
             "radio": self.select_radio,
             "checkbox": self.select_checkbox,
             "multiselect": self.handle_multiselect,
             "date": self.handle_date,
             # Default handler for unknown types
-            "unknown": self.answer_dropdown
+            "unknown": self.answer_dropdown,
         }
 
         # Initialize the advanced learning system
@@ -234,7 +235,7 @@ class Workday:
         ]
 
     def select_checkbox(self, element, data_automation_id):
-        radio_button = element.find_element(By.CSS_SELECTOR, f'input[type="checkbox"]')
+        radio_button = element
         self.wait.until(EC.element_to_be_clickable(radio_button))
 
         # Click the checkbox
@@ -535,10 +536,13 @@ class Workday:
                 # For Workday's custom dropdown/select elements
                 elif role == "button" and "listbox" in aria_controls:
                     element_type = "dropdown"
-                
+
                 # Check for text input elements that might be inside the div
                 try:
-                    text_inputs = element.find_elements(By.XPATH, ".//input[@type='text' or @type='email' or @type='tel' or @type='number']")
+                    text_inputs = element.find_elements(
+                        By.XPATH,
+                        ".//input[@type='text' or @type='email' or @type='tel' or @type='number']",
+                    )
                     if text_inputs:
                         element_type = "text_input"
                 except:
@@ -559,33 +563,41 @@ class Workday:
                 )
                 if checkbox_inputs:
                     element_type = "checkbox"
-                    
+
                 # Check for dropdown indicators
                 dropdown_markers = element.find_elements(
-                    By.XPATH, ".//div[contains(@class, 'dropdown') or contains(@class, 'select')]"
+                    By.XPATH,
+                    ".//div[contains(@class, 'dropdown') or contains(@class, 'select')]",
                 )
                 if dropdown_markers and element_type == "unknown":
                     element_type = "dropdown"
-                    
+
                 # Look for input fields that might indicate multiselect
                 multiselect_markers = element.find_elements(
-                    By.XPATH, ".//div[contains(@class, 'pill') or contains(@class, 'token') or contains(@class, 'chip')]"
+                    By.XPATH,
+                    ".//div[contains(@class, 'pill') or contains(@class, 'token') or contains(@class, 'chip')]",
                 )
                 if multiselect_markers:
                     element_type = "multiselect"
-                    
+
                 # Check for date input fields
                 date_inputs = element.find_elements(
-                    By.XPATH, 
-                    ".//input[@type='date'] | .//input[contains(@placeholder, 'MM')] | .//input[contains(@placeholder, 'DD')] | .//input[contains(@placeholder, 'YYYY')]"
+                    By.XPATH,
+                    ".//input[@type='date'] | .//input[contains(@placeholder, 'MM')] | .//input[contains(@placeholder, 'DD')] | .//input[contains(@placeholder, 'YYYY')]",
                 )
-                if date_inputs and len(date_inputs) >= 2:  # Date fields usually come in groups of 2-3 inputs
+                if (
+                    date_inputs and len(date_inputs) >= 2
+                ):  # Date fields usually come in groups of 2-3 inputs
                     element_type = "date"
-                
+
                 # Also check for date in question text or labels
                 try:
                     question_text = element.text.lower()
-                    if ("date" in question_text or "birthday" in question_text or "dob" in question_text) and element_type == "unknown":
+                    if (
+                        "date" in question_text
+                        or "birthday" in question_text
+                        or "dob" in question_text
+                    ) and element_type == "unknown":
                         element_type = "date"
                 except:
                     pass
@@ -772,9 +784,13 @@ class Workday:
                             # Determine the action based on element type
                             element_type = self._detect_element_type(input_element)
                             print(f"Detected element type: {element_type}")
-                            best_match_action = self.element_type_handlers.get(element_type, self.element_type_handlers["unknown"])
+                            best_match_action = self.element_type_handlers.get(
+                                element_type, self.element_type_handlers["unknown"]
+                            )
                             best_match_value = value
-                            print(f"Matched to element type: {element_type}, action: {best_match_action.__name__}, value: {value}")
+                            print(
+                                f"Matched to element type: {element_type}, action: {best_match_action.__name__}, value: {value}"
+                            )
                             best_match_score = 1.0
                             exact_match_found = True
                             break
@@ -812,16 +828,20 @@ class Workday:
                     print(
                         f"Best semantic match score: {max_score:.4f} for '{question_text}'"
                     )
-                    
+
                     # Determine the action based on element type
                     element_type = self._detect_element_type(input_element)
                     print(f"Detected element type: {element_type}")
-                    
-                    best_match_action = self.element_type_handlers.get(element_type, self.element_type_handlers["unknown"])
+
+                    best_match_action = self.element_type_handlers.get(
+                        element_type, self.element_type_handlers["unknown"]
+                    )
                     best_match_value = embeddingsToValues[keyword_embedding]
-                    
-                    print(f"Matched to element type: {element_type}, action: {best_match_action.__name__}, value: {best_match_value}")
-                    
+
+                    print(
+                        f"Matched to element type: {element_type}, action: {best_match_action.__name__}, value: {best_match_value}"
+                    )
+
                     best_match_score = max_score
 
                 # Lower the threshold slightly to handle more questions
@@ -906,21 +926,25 @@ class Workday:
                         print(
                             f"  • Action type: {learned_mapping.get('action_type', 'unknown')}"
                         )
-                        
+
                         value = learned_mapping.get("value", "")
-                        
+
                         # Try to use the detected element type first
                         element_type = self._detect_element_type(input_element)
                         print(f"Current detected element type: {element_type}")
-                        
+
                         # Use the element type handler if it's a known type
                         action_method = self.element_type_handlers.get(element_type)
-                        
+
                         # If element type is unknown or not mapped, fall back to the recorded action type
                         if not action_method or element_type == "unknown":
-                            action_name = learned_mapping.get("action_type", "unknown_action")
-                            print(f"Falling back to recorded action type: {action_name}")
-                            
+                            action_name = learned_mapping.get(
+                                "action_type", "unknown_action"
+                            )
+                            print(
+                                f"Falling back to recorded action type: {action_name}"
+                            )
+
                             # Map the action name to the actual method
                             if action_name == "fill_input":
                                 action_method = self.fill_input
@@ -1137,7 +1161,7 @@ class Workday:
                 f"Found {len(questions)} questions, processed all of them with some possible errors."
             )
 
-        # input("\nPress Enter to continue after reviewing the questions...")
+        input("\nPress Enter to continue after reviewing the questions...")
         return True
 
     def _check_if_job_closed_or_error(self):
@@ -1564,13 +1588,13 @@ class Workday:
                 except:
                     # Last resort, try various selector patterns common in Workday
                     selectors = [
-                        ".//div[contains(@class, 'input')]//input", 
+                        ".//div[contains(@class, 'input')]//input",
                         ".//div[contains(@data-automation-id, 'input')]//input",
                         ".//div[contains(@class, 'search')]//input",
                         ".//div[contains(@class, 'typeahead')]//input",
-                        ".//div//input[@type='text']"
+                        ".//div//input[@type='text']",
                     ]
-                    
+
                     found = False
                     for selector in selectors:
                         try:
@@ -1580,41 +1604,46 @@ class Workday:
                             break
                         except:
                             continue
-                    
+
                     if not found:
-                        print("Could not find input element within multiselect container, using direct click")
+                        print(
+                            "Could not find input element within multiselect container, using direct click"
+                        )
                         # Fall back to clicking the element directly
                         element.click()
                         time.sleep(1)
                         # Try to find the input element that appeared after clicking
-                        input_element = self.driver.find_element(By.XPATH, "//div[contains(@class, 'dropdown') or contains(@class, 'select')]//input[not(ancestor::div[contains(@style, 'display: none')])]")
+                        input_element = self.driver.find_element(
+                            By.XPATH,
+                            "//div[contains(@class, 'dropdown') or contains(@class, 'select')]//input[not(ancestor::div[contains(@style, 'display: none')])]",
+                        )
 
             # Clear any existing value first
             try:
                 input_element.clear()
             except:
                 pass
-            
+
             print(f"Entering text '{values}' into multiselect")
-            
+
             # Convert values to string if it's a list
             if isinstance(values, list):
                 value_to_use = values[0]  # Use first value if it's a list
             else:
                 value_to_use = values
-            
+
             # Send the text value
             input_element.send_keys(value_to_use)
-            
+
             # Short pause to let the dropdown options populate
             time.sleep(1)
-            
+
             # Try to find and click matching option
             try:
                 # Look for option elements that match our text
                 option_xpath = f"//div[contains(@class, 'dropdown') or contains(@class, 'select')]//div[contains(text(), '{value_to_use}') or text()='{value_to_use}']"
                 options = self.driver.find_elements(By.XPATH, option_xpath)
-                
+
                 if options:
                     # Click the first matching option
                     print(f"Found matching option: '{options[0].text}'")
@@ -1637,10 +1666,10 @@ class Workday:
                     input_element.send_keys(Keys.ENTER)
                 except:
                     pass
-            
+
             # Wait for the selection to be confirmed
             self._wait_for_element_stability(element)
-            
+
             # Verify the selection was successful (if possible)
             try:
                 # Look for selected items or pills that indicate a successful selection
@@ -1648,24 +1677,26 @@ class Workday:
                 try:
                     selected_items = element.find_elements(
                         By.XPATH,
-                        ".//div[contains(@class, 'pill') or contains(@class, 'selected') or contains(@class, 'option')]"
+                        ".//div[contains(@class, 'pill') or contains(@class, 'selected') or contains(@class, 'option')]",
                     )
                 except:
                     # Fallback to global search if local search fails
                     selected_items = self.driver.find_elements(
                         By.XPATH,
-                        "//div[contains(@class, 'pill') or contains(@class, 'selected') or contains(@class, 'option')]"
+                        "//div[contains(@class, 'pill') or contains(@class, 'selected') or contains(@class, 'option')]",
                     )
-                    
+
                 if selected_items:
-                    print(f"Selection confirmed: Found {len(selected_items)} selected items")
+                    print(
+                        f"Selection confirmed: Found {len(selected_items)} selected items"
+                    )
                     for item in selected_items[:3]:  # Show first 3 items
                         print(f"  - Selected: '{item.text}'")
             except Exception as verify_error:
                 print(f"Could not verify selection: {verify_error}")
                 # If we can't verify, continue anyway
                 pass
-                
+
             print("Multiselect operation completed")
             return True
         except Exception as e:
