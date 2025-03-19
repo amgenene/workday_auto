@@ -8,26 +8,10 @@ address_line_1:
 address_line_2: 
 address_line_3: 
 address_city: 
+address_state: 
 address_postal_code: 
-phone_number: 
-linkedin_question: 
+phone_number:  
 resume_path: 
-education: 
-work_experiences:
-- company: 
-  start_year: 
-  start_month: 
-  end_year: 
-  end_month: 
-  job_title: 
-  location: 
-  role_description: 
-- company: 
-  start_year: 
-  start_month: 
-  end_year: 
-  end_month: 
-  job_title: 
-  location: 
-  role_description: 
+# The education and work experience sections are intentionally left empty
+# as the resume will autofill these in workday
 
