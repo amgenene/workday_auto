@@ -113,7 +113,11 @@ class Workday:
         self.url = url
         self.config = Config("./config/profile.yaml")
         self.profile = self.config.profile
-        self.driver = webdriver.Chrome()  # You need to have chromedriver installed
+        self.options = webdriver.ChromeOptions()
+        self.options.add_argument("--remote-debugging-port=9222")
+        self.driver = webdriver.Chrome(
+            options=self.options
+        )  # You need to have chromedriver installed
         self.wait = WebDriverWait(self.driver, 10)
         self.driver.maximize_window()
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -407,6 +411,10 @@ class Workday:
         except Exception as e:
             print("Exception: 'Signin failed'", e)
 
+    def label_error_type(self):
+
+        pass
+
     def _wait_for_element_stability(self, element, timeout=8, poll_frequency=0.2):
         """
         Wait for an element to become stable (not changing) before proceeding
@@ -515,7 +523,7 @@ class Workday:
                     element_type = "radio"
                 elif input_type == "checkbox":
                     element_type = "checkbox"
-            elif tag_name == "select":
+            elif tag_name == "select" or tag_name == "button":
                 element_type = "dropdown"
             elif tag_name == "div":
                 # Check for attributes common in Workday's custom elements
@@ -561,9 +569,10 @@ class Workday:
                 checkbox_inputs = element.find_elements(
                     By.XPATH, ".//input[@type='checkbox']"
                 )
-                if checkbox_inputs:
+                if len(checkbox_inputs) > 1:
                     element_type = "checkbox"
-
+                else:
+                    element_type = "radio"
                 # Check for dropdown indicators
                 dropdown_markers = element.find_elements(
                     By.XPATH,
@@ -683,12 +692,10 @@ class Workday:
         time.sleep(1)
 
         questions = []
-        handled_questions = (
-            []
-        )  # Keep track of which questions were successfully handled
-
+        handled_questions = []  # Keep track of questions that were successfully handled
+        unhandled_questions = []  # Keep track of questions that couldn't be handled
         # Process all required fields (including the first one, which was previously skipped)
-        for field in required_fields:
+        for field in required_fields[1:]:
             # Wrap entire field processing in try-except to continue if one field fails
             try:
                 # Get the parent span containing the question text
@@ -775,7 +782,7 @@ class Workday:
                 # First try exact text matching (case insensitive) as it's more reliable
                 question_lower = question_text.lower().strip()
                 exact_match_found = False
-
+                print("input element before detection attempt", input_element.tag_name)
                 # Try to find exact matches first
                 for keywords, value in self.questionsToActions:
                     for keyword in keywords:
@@ -899,137 +906,11 @@ class Workday:
                     else:
                         print(f"Action failed: {best_match_action.__name__}")
 
-                # Fallback for common Yes/No questions on the later pages
-                if not handled and step == 4:
-                    print(f"Using fallback handling for question: {question_text}")
-                    action_result = self.answer_dropdown(
-                        input_element, automation_id, values="unknown"
-                    )
-                    if action_result:
-                        print(f"Fallback action successful for: {question_text}")
-                        handled_questions.append(
-                            (question_text, "answer_dropdown_fallback", "unknown")
-                        )
-                        handled = True
-
                 # Check if we have any learned mappings for this question
                 if not handled:
-                    learned_mapping = self.learner.find_similar_question(question_text)
-                    if learned_mapping:
-                        print(f"Found learned mapping for question: '{question_text}'")
-                        print(
-                            f"  • This was previously answered as: '{learned_mapping.get('value', '')}'"
-                        )
-                        print(
-                            f"  • Element type: {learned_mapping.get('element_type', 'unknown')}"
-                        )
-                        print(
-                            f"  • Action type: {learned_mapping.get('action_type', 'unknown')}"
-                        )
-
-                        value = learned_mapping.get("value", "")
-
-                        # Try to use the detected element type first
-                        element_type = self._detect_element_type(input_element)
-                        print(f"Current detected element type: {element_type}")
-
-                        # Use the element type handler if it's a known type
-                        action_method = self.element_type_handlers.get(element_type)
-
-                        # If element type is unknown or not mapped, fall back to the recorded action type
-                        if not action_method or element_type == "unknown":
-                            action_name = learned_mapping.get(
-                                "action_type", "unknown_action"
-                            )
-                            print(
-                                f"Falling back to recorded action type: {action_name}"
-                            )
-
-                            # Map the action name to the actual method
-                            if action_name == "fill_input":
-                                action_method = self.fill_input
-                            elif action_name in ["select_radio", "radio"]:
-                                action_method = self.select_radio
-                            elif action_name in ["answer_dropdown", "dropdown"]:
-                                action_method = self.answer_dropdown
-                            elif action_name in ["handle_multiselect", "multiselect"]:
-                                action_method = self.handle_multiselect
-                            elif action_name in ["select_checkbox", "checkbox"]:
-                                action_method = self.select_checkbox
-
-                        if action_method:
-                            # For logging purposes
-                            method_name = action_method.__name__
-                            print(
-                                f"Applying action: {method_name} with value: '{value}'"
-                            )
-
-                            # Scroll element into view
-                            self.driver.execute_script(
-                                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});",
-                                input_element,
-                            )
-
-                            try:
-                                # Briefly highlight the element to show we're working on it
-                                original_style = (
-                                    self.driver.execute_script(
-                                        "return arguments[0].getAttribute('style');",
-                                        input_element,
-                                    )
-                                    or ""
-                                )
-                                self.driver.execute_script(
-                                    "arguments[0].setAttribute('style', arguments[1] + '; border: 3px solid green; background-color: lightgreen !important; transition: all 0.5s;');",
-                                    input_element,
-                                    original_style,
-                                )
-
-                                # Brief pause to show highlight
-                                time.sleep(0.3)
-
-                                # Apply the learned action
-                                result = action_method(
-                                    input_element, automation_id, value
-                                )
-
-                                # Restore original style
-                                self.driver.execute_script(
-                                    "arguments[0].setAttribute('style', arguments[1]);",
-                                    input_element,
-                                    original_style,
-                                )
-
-                                if result:
-                                    method_name = action_method.__name__
-                                    print(f"✅ Successfully applied learned action")
-                                    handled_questions.append(
-                                        (question_text, method_name, value)
-                                    )
-                                    handled = True
-                                else:
-                                    method_name = action_method.__name__
-                                    print(f"❌ Failed to apply learned action")
-                                    self.learner.record_failed_attempt(
-                                        question_text, method_name, "Execution failed"
-                                    )
-                            except Exception as e:
-                                print(f"Error applying learned action: {e}")
-                                # Restore style if there was an error
-                                try:
-                                    self.driver.execute_script(
-                                        "arguments[0].setAttribute('style', arguments[1]);",
-                                        input_element,
-                                        original_style,
-                                    )
-                                except:
-                                    pass
-
-                                method_name = action_method.__name__
-                                self.learner.record_failed_attempt(
-                                    question_text, method_name, str(e)
-                                )
-
+                    unhandled_questions.append(
+                        (question_text, input_element, automation_id)
+                    )
                 print("handled?", handled, question_text)
                 if not handled:
 
@@ -1109,60 +990,49 @@ class Workday:
                         print("Unable to verify field completion, continuing anyway")
             except Exception as question_error:
                 print(f"Error processing question: {question_error}")
+                unhandled_questions.append(
+                    (question_text, input_element, automation_id)
+                )
                 print("Continuing with next question...")
         # Summarize what happened with all questions
         try:
             # Simplify handling check to just count how many items are in handled_questions
             handled_count = len(handled_questions)
             print(f"\n===== Question Processing Summary =====")
-            print(f"Found {len(questions)} questions, processed {handled_count}")
-
-            # Display all handled questions first
-            print("\n--- Handled Questions: ---")
-            for q_text, action_name, value in handled_questions:
-                print(
-                    f"✅ HANDLED | Action: {action_name} | Q: '{q_text}' | Value: '{value}'"
-                )
-
-            # Then show all questions with their status
-            print("\n--- All Questions Found: ---")
-            for q, i, aid in questions:
-                try:
-                    # Simple string search in handled_questions
-                    matched = False
-                    for handled_q, _, _ in handled_questions:
-                        # Compare with exact string match
-                        if q == handled_q:
-                            matched = True
-                            break
-
-                    status = "✅ HANDLED" if matched else "❌ NOT HANDLED"
-                    print(f"{status} | Q: '{q}' -> automation-id: {aid}")
-                except Exception as q_error:
-                    print(f"Error displaying question: {q_error}")
-
-            # If any questions might not have been handled, show an informational note
-            not_handled_count = len(questions)
-            for question_tuple in questions:
-                q = question_tuple[0]  # Get the question text from the tuple
-                for handled_q, _, _ in handled_questions:
-                    if q == handled_q:
-                        not_handled_count -= 1
-                        break
-
-            if not_handled_count > 0:
-                print(f"\n⚠️ INFO: {not_handled_count} questions may need manual review")
-                print(
-                    "These questions might need manual filling or improved question matching."
-                )
-        except Exception as summary_error:
-            print(f"Error generating summary: {summary_error}")
             print(
-                f"Found {len(questions)} questions, processed all of them with some possible errors."
+                f"Found {len(questions)} questions, successfully handled {handled_count}"
             )
 
+            # Display successfully handled questions
+            print("\n--- Successfully Handled Questions: ---")
+            for q_text, action_name, value in handled_questions:
+                print(
+                    f"✅ SUCCESS | Action: {action_name} | Q: '{q_text}' | Value: '{value}'"
+                )
+
+            # Display all questions with their status
+            print("\n--- All Questions Status: ---")
+            for q, i, aid in questions:
+                matched = False
+                for handled_q, _, _ in handled_questions:
+                    if q == handled_q:
+                        matched = True
+                        break
+                status = "✅ HANDLED" if matched else "❌ FAILED/UNHANDLED"
+                print(f"{status} | Q: '{q}' -> automation-id: {aid}")
+
+            not_handled_count = len(questions) - handled_count
+            if not_handled_count > 0:
+                print(
+                    f"\n⚠️ WARNING: {not_handled_count} questions were not successfully handled"
+                )
+                print("These questions may need manual attention.")
+
+        except Exception as summary_error:
+            print(f"Error generating summary: {summary_error}")
+
         input("\nPress Enter to continue after reviewing the questions...")
-        return True
+        return (True, unhandled_questions)
 
     def _check_if_job_closed_or_error(self):
         """Check if the current page indicates the job is closed or no longer available"""
@@ -1442,7 +1312,6 @@ class Workday:
                 time.sleep(2)
             except Exception as e:
                 print("No autofill resume button found", e)
-
             print("existing_company:", existing_company)
             try:
                 time.sleep(2)
@@ -1509,7 +1378,9 @@ class Workday:
                             )
                             success = True
                         else:
-                            success = self.handle_questions(current_page)
+                            (success, unsucessful_questions) = self.handle_questions(
+                                current_page
+                            )
 
                         if success:
                             print(f"Successfully completed page {current_page}")
@@ -1518,6 +1389,7 @@ class Workday:
                             self._wait_for_page_load()
                             current_page += 1
                         else:
+                            print("unsuccessful_questions", unsucessful_questions)
                             print(
                                 f"Issues on page {current_page}, waiting for manual intervention"
                             )
